@@ -651,7 +651,7 @@ final class CatchChatViewModel: ObservableObject {
   /// Post the bubble + capsules for the lifecycle step. Reached when the user
   /// picked a species that has a holding/traveler lifecycle dimension (see
   /// `speciesWithLifecycle`). The ML-predicted stage (if any) is highlighted
-  /// green; the remaining stage is yellow.
+  /// green and rendered first; the remaining stage is yellow.
   private func postLifecycleStep() {
     guard let flow = researcherFlow else { return }
     identificationSubStep = .confirmLifecycle
@@ -668,10 +668,12 @@ final class CatchChatViewModel: ObservableObject {
 
     let holdingColor: ChatCapsuleColor = (mlStage == "holding") ? .green : .yellow
     let travelerColor: ChatCapsuleColor = (mlStage == "traveler") ? .green : .yellow
-    chatCapsules = [
-      ChatCapsule(id: "lc-holding",  label: "Holding",  color: holdingColor,  confidence: nil, action: .selectLifecycle(stage: "Holding")),
-      ChatCapsule(id: "lc-traveler", label: "Traveler", color: travelerColor, confidence: nil, action: .selectLifecycle(stage: "Traveler")),
-    ]
+    let holding = ChatCapsule(id: "lc-holding",  label: "Holding",  color: holdingColor,  confidence: nil, action: .selectLifecycle(stage: "Holding"))
+    let traveler = ChatCapsule(id: "lc-traveler", label: "Traveler", color: travelerColor, confidence: nil, action: .selectLifecycle(stage: "Traveler"))
+
+    // Render the higher-probability prediction first. With no ML pick (or an
+    // unrecognized stage), fall back to Holding-first ordering.
+    chatCapsules = (mlStage == "traveler") ? [traveler, holding] : [holding, traveler]
   }
 
   /// Post the bubble + capsules for the sex step. The ML prediction (if any)
