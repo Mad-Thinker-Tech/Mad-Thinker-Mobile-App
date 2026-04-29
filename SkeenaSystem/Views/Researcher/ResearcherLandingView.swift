@@ -105,6 +105,21 @@ struct ResearcherLandingView: View {
             CommunityToolbarButton()
           }
         }
+        if let donation = communityService.activeCommunityConfig.resolvedDonation {
+          ToolbarItem(placement: .principal) {
+            Link(destination: donation.url) {
+              Text("Donate")
+                .font(.caption)
+                .foregroundColor(.green)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .overlay(
+                  Capsule().stroke(Color.green, lineWidth: 1)
+                )
+            }
+            .accessibilityIdentifier("communityDonationLink")
+          }
+        }
         ToolbarItem(placement: .navigationBarTrailing) {
           Button(action: logoutTapped) {
             HStack(spacing: 6) {

@@ -20,6 +20,8 @@ struct CommunityConfig: Codable, Equatable {
     let displayName: String?
     let learnUrl: String?
     let customUrls: [CustomURL]?
+    let donationUrl: String?
+    let donationDescription: String?
 
     // MARK: - Entitlements (from community_types.entitlements JSONB)
 
@@ -42,6 +44,8 @@ struct CommunityConfig: Codable, Equatable {
         displayName: String?,
         learnUrl: String?,
         customUrls: [CustomURL]? = nil,
+        donationUrl: String? = nil,
+        donationDescription: String? = nil,
         entitlements: [String: Bool],
         geography: CommunityGeography,
         units: String?
@@ -52,6 +56,8 @@ struct CommunityConfig: Codable, Equatable {
         self.displayName = displayName
         self.learnUrl = learnUrl
         self.customUrls = customUrls
+        self.donationUrl = donationUrl
+        self.donationDescription = donationDescription
         self.entitlements = entitlements
         self.geography = geography
         self.units = units
@@ -124,6 +130,25 @@ struct CommunityConfig: Codable, Equatable {
         customUrls ?? []
     }
 
+    // MARK: - Resolved donation link
+
+    /// Returns a renderable donation link only when both fields are non-empty
+    /// and the URL parses. Backend pairs these in the configuration package
+    /// (see api-reference.md `manage-community`); the nil-when-incomplete
+    /// guard means views never render a button with a missing label or a
+    /// dead link.
+    var resolvedDonation: ResolvedDonation? {
+        guard let urlString = donationUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !urlString.isEmpty,
+              let url = URL(string: urlString)
+        else { return nil }
+
+        let description = (donationDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !description.isEmpty else { return nil }
+
+        return ResolvedDonation(description: description, url: url)
+    }
+
     // MARK: - Resolved geography (no xcconfig fallback — empty means not configured)
 
     var resolvedDefaultRiver: String? {
@@ -171,8 +196,17 @@ struct CommunityConfig: Codable, Equatable {
         displayName: nil,
         learnUrl: nil,
         customUrls: nil,
+        donationUrl: nil,
+        donationDescription: nil,
         entitlements: [:],
         geography: .empty,
         units: nil
     )
+}
+
+/// Donation link ready to render — both description and URL are guaranteed
+/// non-empty/parseable. Build via `CommunityConfig.resolvedDonation`.
+struct ResolvedDonation: Equatable {
+    let description: String
+    let url: URL
 }

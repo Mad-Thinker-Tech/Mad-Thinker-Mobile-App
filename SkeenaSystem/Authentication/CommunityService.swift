@@ -128,7 +128,7 @@ final class CommunityService: ObservableObject {
         // Build URL: GET /rest/v1/user_communities with nested joins for branding, geography + entitlements
         var comps = URLComponents(url: projectURL.appendingPathComponent("/rest/v1/user_communities"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
-            URLQueryItem(name: "select", value: "id,community_id,role,is_active,communities(id,name,code,is_active,community_type_id,logo_url,logo_asset_name,tagline,display_name,learn_url,custom_urls,geography,units,community_types(id,name,entitlements))")
+            URLQueryItem(name: "select", value: "id,community_id,role,is_active,communities(id,name,code,is_active,community_type_id,logo_url,logo_asset_name,tagline,display_name,learn_url,custom_urls,donation_url,donation_description,geography,units,community_types(id,name,entitlements))")
         ]
 
         var request = URLRequest(url: comps.url!)
@@ -259,7 +259,8 @@ final class CommunityService: ObservableObject {
 
         let typeName = membership?.communities.communityTypes?.name ?? "nil"
         let customUrlCount = activeCommunityConfig.resolvedCustomUrls.count
-        AppLogging.log("[CommunityService] Active community set: id=\(id) role=\(activeRole ?? "nil") type=\(typeName) memberActive=\(isMemberActive) flags=\(activeCommunityConfig.entitlements.count) logo=\(activeCommunityConfig.logoUrl ?? "bundled") custom_urls=\(customUrlCount) name=\(activeCommunityName)", level: .info, category: .community)
+        let donationStatus = activeCommunityConfig.resolvedDonation == nil ? "absent" : "present"
+        AppLogging.log("[CommunityService] Active community set: id=\(id) role=\(activeRole ?? "nil") type=\(typeName) memberActive=\(isMemberActive) flags=\(activeCommunityConfig.entitlements.count) logo=\(activeCommunityConfig.logoUrl ?? "bundled") custom_urls=\(customUrlCount) donation=\(donationStatus) name=\(activeCommunityName)", level: .info, category: .community)
         for (idx, link) in activeCommunityConfig.resolvedCustomUrls.enumerated() {
             AppLogging.log("[CommunityService]   custom_urls[\(idx)] name=\(link.name) url=\(link.url)", level: .info, category: .community)
         }

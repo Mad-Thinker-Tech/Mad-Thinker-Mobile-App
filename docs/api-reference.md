@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
 **Version:** 2026-04-24
-**Generated:** 2026-04-25T00:05:44.123Z
+**Generated:** 2026-04-28T22:57:09.124Z
 
 ## Key Concepts
 
@@ -507,12 +507,15 @@ Create or update a community. Admin-only (or community admin for update).
 | learn_url | string | ❌ | DEPRECATED — use custom_urls. Mirrors first custom_urls entry for legacy clients. |
 | custom_urls | array | ❌ | Up to 5 named links: [{ name: string (≤100), url: string (≤2048) }, ...]. Empty array clears. |
 | units | string | ❌ | 'imperial' or 'metric' |
+| donation_url | string | ❌ | Optional single donation URL (≤2048 chars). Pair with donation_description. Send empty string or null to clear. |
+| donation_description | string | ❌ | Optional description for the donation link (≤500 chars). When donation_url is set, this should be populated to describe the cause/purpose. |
 
 **Notes:**
 
 - Response includes is_active: false for inactive communities; app must handle this state.
 - custom_urls replaces the single learn_url. Mobile apps should render the array as a list of named links (e.g. on a community profile/learn screen). learn_url remains populated with the first entry's URL for backward compatibility but will be removed in a future release.
 - Validation: max 5 entries, each entry requires non-empty name (≤100 chars) and url (≤2048 chars). Violations return 400.
+- donation_url and donation_description are optional. When donation_url is populated, the configuration package returned to clients will include both fields so apps can render a 'Donate' link with a description. If donation_url is empty/null, both fields will be null.
 
 ---
 

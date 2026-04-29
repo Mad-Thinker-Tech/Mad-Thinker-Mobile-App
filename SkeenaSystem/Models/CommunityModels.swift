@@ -41,6 +41,8 @@ struct CommunityInfo: Codable, Identifiable {
     let displayName: String?
     let learnUrl: String?
     let customUrls: [CustomURL]?
+    let donationUrl: String?
+    let donationDescription: String?
 
     // Geography (JSONB from communities table)
     let geography: CommunityGeography?
@@ -61,6 +63,8 @@ struct CommunityInfo: Codable, Identifiable {
         case displayName = "display_name"
         case learnUrl = "learn_url"
         case customUrls = "custom_urls"
+        case donationUrl = "donation_url"
+        case donationDescription = "donation_description"
         case geography
         case units
         case communityTypes = "community_types"
@@ -76,6 +80,8 @@ struct CommunityInfo: Codable, Identifiable {
             displayName: displayName,
             learnUrl: learnUrl,
             customUrls: customUrls,
+            donationUrl: donationUrl,
+            donationDescription: donationDescription,
             entitlements: communityTypes?.entitlements ?? [:],
             geography: geography ?? .empty,
             units: units
