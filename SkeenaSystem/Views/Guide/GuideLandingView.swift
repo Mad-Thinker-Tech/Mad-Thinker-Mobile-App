@@ -31,6 +31,9 @@ struct GuideLandingView: View {
   @State private var mapReports: [MapReportDTO] = []
   @State private var mapFetchDone = false
 
+  // Pushed full-screen map (expand button on the landing tile)
+  @State private var showFullMap = false
+
   // Live weather
   @State private var liveWeather: LiveWeather? = nil
 
@@ -60,6 +63,11 @@ struct GuideLandingView: View {
       }
       .navigationDestination(isPresented: $goToManageAccount) {
         ManageProfileView().environmentObject(auth)
+      }
+      .navigationDestination(isPresented: $showFullMap) {
+        GuideFullMapView()
+          .environment(\.userRole, .guide)
+          .environment(\.guideNavigateTo, handleGuideNavigateTo)
       }
       // Farmed list nav removed — farmed marks are now in Activities → Observations → Marks
       .navigationDestination(for: GuideDestination.self) { dest in
@@ -354,12 +362,26 @@ struct GuideLandingView: View {
           .padding(.horizontal, 16)
         } else {
           VStack(spacing: 4) {
-            GuideLandingMapView(
-              reports: mapReports,
-              userLocation: locationManager.lastLocation?.coordinate
-            )
-              .frame(height: 230)
-              .clipShape(RoundedRectangle(cornerRadius: 14))
+            ZStack(alignment: .topTrailing) {
+              GuideLandingMapView(
+                reports: mapReports,
+                userLocation: locationManager.lastLocation?.coordinate
+              )
+                .frame(height: 230)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+
+              Button { showFullMap = true } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                  .font(.system(size: 14, weight: .semibold))
+                  .foregroundColor(.white)
+                  .padding(8)
+                  .background(Color.black.opacity(0.55), in: Circle())
+              }
+              .buttonStyle(.plain)
+              .padding(8)
+              .accessibilityIdentifier("expandMapButton")
+              .accessibilityLabel("Expand map")
+            }
 
             GuideLandingMapLegend()
           }

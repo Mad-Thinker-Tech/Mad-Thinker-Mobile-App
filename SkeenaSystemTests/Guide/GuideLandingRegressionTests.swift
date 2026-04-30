@@ -612,5 +612,15 @@ final class GuideRegressionTests: XCTestCase {
   // behavior (isResearcherRole || conservationMode → beginResearcherFlow) is
   // exercised end-to-end in the Phase 5 integration tests that drive a full
   // photo-analysis cycle through a stubbed analyzer.
+
+  // MARK: - Full-page map (expand button on landing tile)
+
+  /// The expand-map button on the guide landing tile pushes a dedicated
+  /// full-page map view. Locking instantiation here so a future refactor
+  /// can't quietly delete the destination and leave the button as a no-op.
+  func testGuideFullMapView_instantiatesWithoutCrash() {
+    let view = GuideFullMapView()
+    XCTAssertNotNil(view, "GuideFullMapView must instantiate without crashing")
+  }
 }
 
