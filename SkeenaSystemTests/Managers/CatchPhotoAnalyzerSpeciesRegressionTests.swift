@@ -35,13 +35,15 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
                    "speciesLabels must stay in alphabetical order to match Python ImageFolder training. Did you append a new species at the end instead of inserting it?")
   }
 
-  /// Locks the exact 7-class set — any addition or removal here is a deliberate
+  /// Locks the exact 9-class set — any addition or removal here is a deliberate
   /// model retrain and must update this assertion in lockstep.
   func testSpeciesLabels_exactSet() {
     XCTAssertEqual(
       Set(CatchPhotoAnalyzer.speciesLabels),
       Set([
-        "atlantic_salmon",
+        "atlantic_salmon_holding",
+        "atlantic_salmon_traveler",
+        "brown_trout",
         "chinook_salmon",
         "lingcod",
         "other",
@@ -53,14 +55,19 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
     )
   }
 
-  func testSpeciesLabels_chinookSalmonAtIndex1() {
-    XCTAssertEqual(CatchPhotoAnalyzer.speciesLabels[1], "chinook_salmon",
-                   "Alphabetical order: chinook_salmon should sit at index 1, between atlantic_salmon (0) and lingcod (2)")
+  func testSpeciesLabels_brownTroutAtIndex2() {
+    XCTAssertEqual(CatchPhotoAnalyzer.speciesLabels[2], "brown_trout",
+                   "Alphabetical order: brown_trout should sit at index 2, between atlantic_salmon_traveler (1) and chinook_salmon (3)")
   }
 
-  func testSpeciesLabels_lingcodAtIndex2() {
-    XCTAssertEqual(CatchPhotoAnalyzer.speciesLabels[2], "lingcod",
-                   "Alphabetical order: lingcod should sit at index 2, between chinook_salmon (1) and other (3)")
+  func testSpeciesLabels_chinookSalmonAtIndex3() {
+    XCTAssertEqual(CatchPhotoAnalyzer.speciesLabels[3], "chinook_salmon",
+                   "Alphabetical order: chinook_salmon should sit at index 3, between brown_trout (2) and lingcod (4)")
+  }
+
+  func testSpeciesLabels_lingcodAtIndex4() {
+    XCTAssertEqual(CatchPhotoAnalyzer.speciesLabels[4], "lingcod",
+                   "Alphabetical order: lingcod should sit at index 4, between chinook_salmon (3) and other (5)")
   }
 
   // MARK: - regressorBypassSpecies
@@ -70,7 +77,9 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
   /// to calibrate the regressor for that class yet.
   func testRegressorBypassSpecies_includesAllUncalibratedClasses() {
     let bypass = CatchPhotoAnalyzer.regressorBypassSpecies
-    XCTAssertTrue(bypass.contains("atlantic_salmon"))
+    XCTAssertTrue(bypass.contains("atlantic_salmon_holding"))
+    XCTAssertTrue(bypass.contains("atlantic_salmon_traveler"))
+    XCTAssertTrue(bypass.contains("brown_trout"))
     XCTAssertTrue(bypass.contains("chinook_salmon"))
     XCTAssertTrue(bypass.contains("lingcod"))
     XCTAssertTrue(bypass.contains("sea_run_trout"))
