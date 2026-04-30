@@ -73,10 +73,9 @@ struct ResearcherLandingView: View {
         ManageProfileView().environmentObject(auth)
       }
       .navigationDestination(for: GuideDestination.self) { dest in
-        // Researchers share the publicToolbar layout (Home, Catches, Social,
-        // Learn) so we only handle destinations that the toolbar actually
-        // exposes. Everything else is EmptyView to fail loud if the toolbar
-        // layout changes without a corresponding case here.
+        // Researcher toolbar exposes Home, Activities, Maps, [Social], Learn.
+        // Anything outside that set is EmptyView so a toolbar layout drift
+        // is caught visibly instead of silently routing somewhere wrong.
         switch dest {
         case .activities:
           ActivitiesView()
@@ -88,6 +87,10 @@ struct ResearcherLandingView: View {
             .environment(\.guideNavigateTo, handleNavigateTo)
         case .explore:
           ExploreView()
+            .environment(\.userRole, .researcher)
+            .environment(\.guideNavigateTo, handleNavigateTo)
+        case .maps:
+          ResearcherMapView()
             .environment(\.userRole, .researcher)
             .environment(\.guideNavigateTo, handleNavigateTo)
         case .trips, .observations, .conditions, .learn:

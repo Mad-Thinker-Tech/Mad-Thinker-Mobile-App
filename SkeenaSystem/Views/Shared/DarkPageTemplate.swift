@@ -43,7 +43,7 @@ extension EnvironmentValues {
 
 /// Destinations the guide toolbar can navigate to.
 enum GuideDestination: Hashable {
-  case trips, activities, community, observations, conditions, learn, explore
+  case trips, activities, community, observations, conditions, learn, explore, maps
 }
 
 private struct GuideNavigateToKey: EnvironmentKey {
@@ -81,7 +81,7 @@ struct RoleAwareToolbar: View {
     case .public:
       publicToolbar
     case .researcher:
-      publicToolbar
+      researcherToolbar
     }
   }
 
@@ -110,6 +110,27 @@ struct RoleAwareToolbar: View {
     }
     ToolbarTab(icon: "safari", label: "Activities", badgeCount: pendingUploads.totalPending) {
       if activeTab != "activities" { guideNavigateTo(.activities) }
+    }
+    if !socialDisabled {
+      ToolbarTab(icon: "message", label: "Social") {
+        if activeTab != "community" { guideNavigateTo(.community) }
+      }
+    }
+    ToolbarTab(icon: "book.fill", label: "Learn") {
+      if activeTab != "explore" { guideNavigateTo(.explore) }
+    }
+  }
+
+  // MARK: Researcher tabs — Home, Activities, Maps, [Social], Learn
+  @ViewBuilder private var researcherToolbar: some View {
+    ToolbarTab(icon: "house", label: "Home") {
+      guideNavigateTo(nil)
+    }
+    ToolbarTab(icon: "safari", label: "Activities", badgeCount: pendingUploads.totalPending) {
+      if activeTab != "activities" { guideNavigateTo(.activities) }
+    }
+    ToolbarTab(icon: "map", label: "Maps") {
+      if activeTab != "maps" { guideNavigateTo(.maps) }
     }
     if !socialDisabled {
       ToolbarTab(icon: "message", label: "Social") {

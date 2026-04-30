@@ -162,6 +162,9 @@ struct PublicLandingView: View {
           ExploreView()
             .environment(\.userRole, .public)
             .environment(\.guideNavigateTo, handleNavigateTo)
+        case .maps:
+          // Maps is researcher-only — should not be reached from a public toolbar
+          EmptyView()
         }
       }
       .toolbar {

@@ -459,20 +459,37 @@ final class ResearcherRoleRegressionTests: XCTestCase {
 
   // MARK: - Researcher toolbar snapshot
 
-  func testSnapshot_researcherToolbarTabs_matchPublicTabs() {
-    // SNAPSHOT: Researcher toolbar mirrors public — Home, Activities, Learn.
-    // Social is conditionally shown when the add-on is active.
+  func testSnapshot_researcherToolbarTabs_baseline() {
+    // SNAPSHOT: Researcher toolbar — Home, Activities, Maps, Learn.
+    // Social is conditionally inserted between Maps and Learn when the add-on
+    // is active. Maps sits directly between Activities and Learn so a
+    // researcher can jump straight to a member-scoped catch map.
     let researcherTabs: [(icon: String, label: String)] = [
       ("house", "Home"),
       ("safari", "Activities"),
+      ("map", "Maps"),
       ("book.fill", "Learn")
     ]
-    XCTAssertEqual(researcherTabs.count, 3,
-                   "SNAPSHOT: Researcher toolbar must have exactly 3 baseline tabs (Social add-on off)")
+    XCTAssertEqual(researcherTabs.count, 4,
+                   "SNAPSHOT: Researcher toolbar must have exactly 4 baseline tabs (Social add-on off)")
+    XCTAssertEqual(researcherTabs.map(\.label), ["Home", "Activities", "Maps", "Learn"],
+                   "SNAPSHOT: Researcher tab order must be Home → Activities → Maps → Learn")
     XCTAssertFalse(researcherTabs.contains(where: { $0.label == "Trips" }),
                    "SNAPSHOT: Researcher toolbar must not contain a Trips tab")
     XCTAssertFalse(researcherTabs.contains(where: { $0.label == "Catches" }),
                    "SNAPSHOT: 'Catches' was renamed to 'Activities'")
+  }
+
+  func testGuideDestination_includesMapsCase() {
+    // SNAPSHOT: The Maps tab is wired through GuideDestination.maps. If this
+    // case is removed, the researcher Maps toolbar tap stops compiling.
+    let dest: GuideDestination = .maps
+    XCTAssertEqual(dest, .maps)
+  }
+
+  func testResearcherMapView_instantiatesWithoutCrash() {
+    let view = ResearcherMapView()
+    XCTAssertNotNil(view, "ResearcherMapView must instantiate without crashing")
   }
 
   // MARK: - Role switching: researcher ↔ other roles

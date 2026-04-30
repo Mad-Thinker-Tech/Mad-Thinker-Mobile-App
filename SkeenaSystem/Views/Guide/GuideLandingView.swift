@@ -92,6 +92,9 @@ struct GuideLandingView: View {
         case .explore:
           // Guides don't use Explore — should not be reached
           EmptyView()
+        case .maps:
+          // Maps is researcher-only — should not be reached from a guide toolbar
+          EmptyView()
         }
       }
       .toolbar {
