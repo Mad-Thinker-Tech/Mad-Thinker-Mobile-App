@@ -9,9 +9,10 @@ struct RiverConditionsResponse: Decodable {
   let river: String
   let stationId: String
   let date: String
+  let isTidal: Bool
 
   let weather: WeatherBlock
-  let tides: TidesBlock
+  let tides: TidesBlock?
   let waterLevels: [WaterLevelEntry]
   let waterTemperatures: [WaterTemperatureEntry]?
 
@@ -72,8 +73,10 @@ struct FishingForecastResultView: View {
         ScrollView {
           VStack(spacing: 12) {
             weatherThreeDayCompact
-            tideWaveCard
-            tidesTextBlocks
+            if result.isTidal, let tides = result.tides {
+              tideWaveCard(tides: tides)
+              tidesTextBlocks(tides: tides)
+            }
             waterLevelTrendSection
             waterTemperatureSection
             footer
@@ -184,16 +187,16 @@ struct FishingForecastResultView: View {
 
   // MARK: - Tide Wave Card
 
-  private var tideWaveCard: some View {
+  private func tideWaveCard(tides: RiverConditionsResponse.TidesBlock) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Tide Heights")
         .font(.subheadline).foregroundColor(.white)
 
       TideWaveGraph(
-        previousHigh: result.tides.previousHigh,
-        nextHigh: result.tides.nextHigh,
-        previousLow: result.tides.previousLow,
-        nextLow: result.tides.nextLow
+        previousHigh: tides.previousHigh,
+        nextHigh: tides.nextHigh,
+        previousLow: tides.previousLow,
+        nextLow: tides.nextLow
       )
       .frame(height: 140)
     }
@@ -205,12 +208,12 @@ struct FishingForecastResultView: View {
 
   // MARK: - Tides Text Blocks
 
-  private var tidesTextBlocks: some View {
+  private func tidesTextBlocks(tides: RiverConditionsResponse.TidesBlock) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       VStack(alignment: .leading, spacing: 6) {
         Text("High").font(.subheadline).bold().foregroundColor(.white)
-        tideRow(title: "Previous", point: result.tides.previousHigh, highlight: false)
-        tideRow(title: "Next", point: result.tides.nextHigh, highlight: true)
+        tideRow(title: "Previous", point: tides.previousHigh, highlight: false)
+        tideRow(title: "Next", point: tides.nextHigh, highlight: true)
       }
       .padding(8)
       .background(Color.white.opacity(0.06))
@@ -218,8 +221,8 @@ struct FishingForecastResultView: View {
 
       VStack(alignment: .leading, spacing: 6) {
         Text("Low").font(.subheadline).bold().foregroundColor(.white)
-        tideRow(title: "Previous", point: result.tides.previousLow, highlight: false)
-        tideRow(title: "Next", point: result.tides.nextLow, highlight: false)
+        tideRow(title: "Previous", point: tides.previousLow, highlight: false)
+        tideRow(title: "Next", point: tides.nextLow, highlight: false)
       }
       .padding(8)
       .background(Color.white.opacity(0.06))

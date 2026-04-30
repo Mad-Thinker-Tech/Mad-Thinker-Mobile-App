@@ -489,6 +489,7 @@ struct FishingForecastRequestView: View {
     let stationId: String?
     let source: String?
     let date: String?
+    let isTidal: Bool?
 
     let weather: LooseWeatherBlock?
     let tides: LooseTidesBlock?
@@ -579,30 +580,38 @@ struct FishingForecastRequestView: View {
       )
     )
 
-    // Tides (create placeholders for any missing entries)
-    let t = loose.tides
-    let tides = RiverConditionsResponse.TidesBlock(
-      previousHigh: .init(
-        time: normalizeTime(t?.previousHigh?.time, defaultDate: date),
-        heightM: t?.previousHigh?.heightM ?? 0,
-        type: t?.previousHigh?.type ?? "high"
-      ),
-      nextHigh: .init(
-        time: normalizeTime(t?.nextHigh?.time, defaultDate: date),
-        heightM: t?.nextHigh?.heightM ?? 0,
-        type: t?.nextHigh?.type ?? "high"
-      ),
-      previousLow: .init(
-        time: normalizeTime(t?.previousLow?.time, defaultDate: date),
-        heightM: t?.previousLow?.heightM ?? 0,
-        type: t?.previousLow?.type ?? "low"
-      ),
-      nextLow: .init(
-        time: normalizeTime(t?.nextLow?.time, defaultDate: date),
-        heightM: t?.nextLow?.heightM ?? 0,
-        type: t?.nextLow?.type ?? "low"
+    // Tides — only materialize when the backend marks this water body as tidal.
+    // Non-tidal water bodies receive null tide fields; we surface this as nil so
+    // the result view can hide tide cards entirely.
+    let isTidal = loose.isTidal ?? false
+    let tides: RiverConditionsResponse.TidesBlock?
+    if isTidal {
+      let t = loose.tides
+      tides = RiverConditionsResponse.TidesBlock(
+        previousHigh: .init(
+          time: normalizeTime(t?.previousHigh?.time, defaultDate: date),
+          heightM: t?.previousHigh?.heightM ?? 0,
+          type: t?.previousHigh?.type ?? "high"
+        ),
+        nextHigh: .init(
+          time: normalizeTime(t?.nextHigh?.time, defaultDate: date),
+          heightM: t?.nextHigh?.heightM ?? 0,
+          type: t?.nextHigh?.type ?? "high"
+        ),
+        previousLow: .init(
+          time: normalizeTime(t?.previousLow?.time, defaultDate: date),
+          heightM: t?.previousLow?.heightM ?? 0,
+          type: t?.previousLow?.type ?? "low"
+        ),
+        nextLow: .init(
+          time: normalizeTime(t?.nextLow?.time, defaultDate: date),
+          heightM: t?.nextLow?.heightM ?? 0,
+          type: t?.nextLow?.type ?? "low"
+        )
       )
-    )
+    } else {
+      tides = nil
+    }
 
     // Water levels (empty if missing or malformed)
     let levels: [RiverConditionsResponse.WaterLevelEntry] =
@@ -623,6 +632,7 @@ struct FishingForecastRequestView: View {
       river: river,
       stationId: stationId,
       date: date,
+      isTidal: isTidal,
       weather: weather,
       tides: tides,
       waterLevels: levels,

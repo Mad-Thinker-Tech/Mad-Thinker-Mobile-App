@@ -66,18 +66,43 @@ final class FisheriesConditionsTests: PostLoginTestBase {
     }
 
     // MARK: - TC-FISH-005
-    // REQ-FISH-003: graphical tide wave chart and tide blocks visible
+    // REQ-FISH-003: tide cards are shown only when the water body is tidal.
+    // Non-tidal rivers (e.g. Babine) must not render the tide wave chart or
+    // High/Low text blocks.
 
-    func testTideWaveChartPresent() {
+    func testTidesHiddenForNonTidalRiver() {
         navigateToRiverDetail()
 
+        // Wait for the detail view to actually load before asserting absence,
+        // otherwise we'd pass trivially on a slow render.
+        XCTAssertTrue(app.otherElements["weatherSection"].waitForExistence(timeout: 15),
+                      "TC-FISH-005: Detail view should render before checking tide visibility")
+
+        XCTAssertFalse(app.otherElements["tidesWaveSection"].exists,
+                       "TC-FISH-005: Tide wave chart must be hidden for non-tidal river '\(riverName)'")
+        XCTAssertFalse(app.staticTexts["Tide Heights"].exists,
+                       "TC-FISH-005: 'Tide Heights' label must be hidden for non-tidal river")
+    }
+
+    // MARK: - TC-FISH-006
+    // REQ-FISH-003: tide cards are shown for tidal water bodies (e.g. Puget Sound).
+
+    func testTidesShownForTidalWaterBody() throws {
+        let tidalName = "Puget Sound"
+        openConditions()
+        let forecast = ForecastPage(app: app)
+        let tidalButton = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", tidalName)).firstMatch
+        guard tidalButton.waitForExistence(timeout: 10) else {
+            throw XCTSkip("TC-FISH-006: Tidal water body '\(tidalName)' not configured for this community")
+        }
+        forecast.tapRiver(tidalName)
+
         XCTAssertTrue(app.otherElements["tidesWaveSection"].waitForExistence(timeout: 15),
-                      "TC-FISH-005: Tide Heights wave chart section should be present")
+                      "TC-FISH-006: Tide wave chart should be present for tidal water body '\(tidalName)'")
         XCTAssertTrue(app.staticTexts["Tide Heights"].exists,
-                      "TC-FISH-005: 'Tide Heights' label should be present")
-        // High and Low tide blocks
-        XCTAssertTrue(app.staticTexts["High"].exists, "TC-FISH-005: High tide block should be present")
-        XCTAssertTrue(app.staticTexts["Low"].exists, "TC-FISH-005: Low tide block should be present")
+                      "TC-FISH-006: 'Tide Heights' label should be present for tidal water body")
+        XCTAssertTrue(app.staticTexts["High"].exists, "TC-FISH-006: High tide block should be present")
+        XCTAssertTrue(app.staticTexts["Low"].exists, "TC-FISH-006: Low tide block should be present")
     }
 
     // MARK: - TC-FISH-007

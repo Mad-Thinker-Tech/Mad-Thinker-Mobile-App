@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
-**Version:** 2026-04-24
-**Generated:** 2026-04-28T22:57:09.124Z
+**Version:** 2026-04-30
+**Generated:** 2026-04-30T16:10:48.947Z
 
 ## Key Concepts
 
@@ -639,18 +639,33 @@ Current conditions and 8-hour hourly forecast based on GPS coordinates.
 
 ## Water Conditions
 
-**GET** `/functions/v1/river-conditions`
+**POST** `/functions/v1/river-conditions`
 
-Get river/water conditions from configured stations.
+Get river/water conditions (weather, tides, water levels, optional water temperatures) for a configured water body.
 
 **Auth:** required
 
-**Query Parameters:**
+**Request Body:**
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| community_id | uuid | ✅ | Community UUID |
-| station_id | string | ❌ | Specific station ID |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| date | string (YYYY-MM-DD) | ✅ | Target date |
+| river | string | ✅ | Water body name (must be active for the community) |
+| community_id | uuid | ❌ | Community UUID. Inferred from JWT if user has a single membership. |
+| include_water_temperature | boolean | ❌ | Include daily water temperatures when the gauge supports it. |
+
+**Response:**
+
+- `name`: string — water body name
+- `water_type`: string — e.g. river, lake, ocean
+- `station_id`: string — gauge station ID (empty if no gauge)
+- `source`: string — data source (USGS, NOAA, WSC, CHS, ...)
+- `isTidal`: boolean — true when the water body is tidal; tides[] is populated only when true
+- `date`: string — echoed target date (YYYY-MM-DD)
+- `weather`: object — { previous_day, target_day, next_day } each with high/low temp °C and precipitation mm
+- `tides`: object — { previous_high, next_high, previous_low, next_low } (all null when isTidal is false)
+- `water_levels`: array — last 4 days of daily-average water level in feet
+- `water_temperatures`: array (optional) — last 4 days of daily-average water temperature in °C, only when include_water_temperature=true
 
 ---
 
