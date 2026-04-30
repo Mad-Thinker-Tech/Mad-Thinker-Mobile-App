@@ -28,9 +28,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     case finalSummary           // show all confirmed values + derived weight
     case studyParticipation     // "Are you participating in a study?" — Pit, Floy, Radio Telemetry
     case floyTagID              // conditional: enter Floy Tag ID (only if Floy selected)
-    case sampleCollection       // "Are you taking a sample?" — Scale, Fin Tip, Both
-    case scaleScan              // scan barcode for scale envelope
-    case finTipScan             // scan barcode for fin tip envelope
+    case sampleCollection       // "Are you taking samples?" — Yes / No
+    case envelopeContents       // "What's in the envelope?" — Scale / Fin clip / Both
+    case envelopeScan           // scan or type the envelope barcode (single envelope, contents already declared)
     case voiceMemo              // offer voice memo
     case complete
   }
@@ -42,11 +42,36 @@ final class ResearcherCatchFlowManager: ObservableObject {
     case radioTelemetry = "Radio Telemetry"
   }
 
-  /// Sample type selected by the researcher (nil = not taking a sample).
-  enum SampleType: String, Equatable {
+  /// What's inside the sample envelope. The researcher declares this BEFORE
+  /// scanning the envelope so the upload payload can map a single barcode to
+  /// the correct downstream sample-type fields.
+  ///
+  /// `wireValues` is the backend `sample_contents` payload (string array).
+  /// The upload mapping in `CatchChatViewModel.makeCatchSnapshot` reads this
+  /// enum and emits `sampleEnvelopeId` + `sampleContents` together — both
+  /// fields, or neither (the backend rejects one without the other).
+  enum SampleContents: String, Equatable {
     case scale = "Scale"
-    case finTip = "Fin Tip"
+    case finClip = "Fin clip"
     case both = "Both"
+
+    var wireValues: [String] {
+      switch self {
+      case .scale: return ["scale"]
+      case .finClip: return ["fin_clip"]
+      case .both: return ["scale", "fin_clip"]
+      }
+    }
+
+    /// Lowercase phrase used in the post-scan confirmation message
+    /// ("Envelope A7K3F9 logged with scale + fin clip").
+    var summaryPhrase: String {
+      switch self {
+      case .scale: return "scale"
+      case .finClip: return "fin clip"
+      case .both: return "scale + fin clip"
+      }
+    }
   }
 
   // MARK: - Published State
@@ -103,10 +128,11 @@ final class ResearcherCatchFlowManager: ObservableObject {
   @Published var studyType: StudyType?
   @Published var floyTagNumber: String?
 
-  // Sample collection
-  @Published var sampleType: SampleType?
-  @Published var scaleSampleBarcode: String?
-  @Published var finTipSampleBarcode: String?
+  // Sample collection — single envelope per catch; `sampleContents` declares
+  // what's inside, and `envelopeBarcode` holds the scanned (or manually typed)
+  // barcode ID. Both nil when the researcher declined to take samples.
+  @Published var sampleContents: SampleContents?
+  @Published var envelopeBarcode: String?
 
   // Length estimation source (updated when species correction triggers re-estimation)
   var lengthSource: LengthEstimateSource?
@@ -244,21 +270,20 @@ final class ResearcherCatchFlowManager: ObservableObject {
       return "Are you taking a sample?"
 
     case .sampleCollection:
-      // "No" was selected. Move to voice memo.
-      sampleType = nil
+      // "No" was selected. Clear any prior envelope state and move on.
+      sampleContents = nil
+      envelopeBarcode = nil
       currentStep = .voiceMemo
       return "Would you like to add a voice memo for this catch?"
 
-    case .scaleScan:
-      // Scale ID entered or skipped → check if fin tip also needed
-      if sampleType == .both {
-        currentStep = .finTipScan
-        return "Now type the Fin Tip ID from the envelope."
-      }
-      currentStep = .voiceMemo
-      return "Would you like to add a voice memo for this catch?"
+    case .envelopeContents:
+      // Capsule-driven step (Scale / Fin clip / Both). A bare `confirm()` here
+      // is treated as a no-op — the user must pick a contents value via
+      // selectEnvelopeContents() to advance.
+      return ""
 
-    case .finTipScan:
+    case .envelopeScan:
+      // Envelope barcode confirmed (scanned or typed). Advance to voice memo.
       currentStep = .voiceMemo
       return "Would you like to add a voice memo for this catch?"
 
@@ -340,24 +365,16 @@ final class ResearcherCatchFlowManager: ObservableObject {
       }
       return ("Please enter the Floy Tag ID.", false, false)
 
-    case .scaleScan:
-      // Scale card ID is typed manually (no barcode scanner yet). Store the
-      // value but don't advance — the user taps Confirm to continue.
+    case .envelopeScan:
+      // Single envelope barcode — typed manually as the fallback path when
+      // the user opts out of the scanner. Stored bare; `recordScannedEnvelope`
+      // is the parallel path used by the scanner sheet.
       let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
       if !trimmed.isEmpty {
-        scaleSampleBarcode = trimmed
-        return ("Scale Card ID: \(trimmed)\n§\nConfirm, or type a corrected value.", false, true)
+        envelopeBarcode = trimmed
+        return (envelopeConfirmationMessage(id: trimmed), false, true)
       }
-      return ("Please enter the Scale Card ID.", false, false)
-
-    case .finTipScan:
-      // Fin tip envelope ID is typed manually. Same pattern as scaleScan.
-      let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-      if !trimmed.isEmpty {
-        finTipSampleBarcode = trimmed
-        return ("Fin Tip ID: \(trimmed)\n§\nConfirm, or type a corrected value.", false, true)
-      }
-      return ("Please enter the Fin Tip ID.", false, false)
+      return ("Please enter the envelope ID.", false, false)
 
     case .finalSummary:
       // Accept typed updates to any identification field after measurements
@@ -386,14 +403,32 @@ final class ResearcherCatchFlowManager: ObservableObject {
       return (finalAnalysisText(), false, true)
 
     default:
-      // .studyParticipation, .sampleCollection, .voiceMemo, .complete —
-      // these are button-driven steps; typed input isn't expected.
+      // .studyParticipation, .sampleCollection, .envelopeContents, .voiceMemo,
+      // .complete — these are button-driven steps; typed input isn't expected.
       return (
         "I'm not expecting typed input right now — use the buttons above, or upload a new photo.",
         false,
         false
       )
     }
+  }
+
+  /// Standard message shown after the envelope ID is captured (scanned or
+  /// typed). Includes the contents declared at the prior step so the
+  /// researcher can verify both at once before tapping Confirm.
+  private func envelopeConfirmationMessage(id: String) -> String {
+    let contents = sampleContents?.summaryPhrase ?? "samples"
+    return "Envelope: \(id)\nContents: \(contents)\n§\nConfirm, or scan / type a corrected value."
+  }
+
+  /// Called by the scanner sheet after a successful scan. Stores the parsed
+  /// envelope ID and posts the same confirmation prompt the manual-entry path
+  /// produces. The chat view is responsible for attaching the Confirm/Retry
+  /// capsules to the resulting bubble.
+  func recordScannedEnvelope(id: String) -> String {
+    let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+    envelopeBarcode = trimmed.isEmpty ? nil : trimmed
+    return envelopeConfirmationMessage(id: envelopeBarcode ?? "")
   }
 
   /// Step-appropriate re-prompt when the user's input was rejected by the
@@ -409,10 +444,8 @@ final class ResearcherCatchFlowManager: ObservableObject {
       return "Let's keep it civil. Please enter the girth in inches (e.g., 14 or 14.5)."
     case .floyTagID:
       return "Let's keep it civil. Please enter the Floy Tag ID."
-    case .scaleScan:
-      return "Let's keep it civil. Please enter the Scale Card ID."
-    case .finTipScan:
-      return "Let's keep it civil. Please enter the Fin Tip ID."
+    case .envelopeScan:
+      return "Let's keep it civil. Please enter the envelope ID."
     default:
       return "Let's keep it civil. Use the buttons above, or upload a new photo."
     }
@@ -430,25 +463,20 @@ final class ResearcherCatchFlowManager: ObservableObject {
     } else {
       // Pit and Radio Telemetry don't have follow-up yet
       currentStep = .sampleCollection
-      return ("Study: \(type.rawValue)\n§\nAre you taking a sample?", .sampleCollection)
+      return ("Study: \(type.rawValue)\n§\nAre you taking samples?", .sampleCollection)
     }
   }
 
-  /// Called when the researcher selects a sample type (Scale, Fin Tip, Both).
-  func selectSample(_ type: SampleType) -> (message: String, nextStep: Step) {
-    sampleType = type
-
-    switch type {
-    case .scale:
-      currentStep = .scaleScan
-      return ("Sample: \(type.rawValue)\n§\nType the Scale Card ID from the envelope.", .scaleScan)
-    case .finTip:
-      currentStep = .finTipScan
-      return ("Sample: \(type.rawValue)\n§\nType the Fin Tip ID from the envelope.", .finTipScan)
-    case .both:
-      currentStep = .scaleScan
-      return ("Sample: \(type.rawValue)\n§\nFirst, type the Scale Card ID.", .scaleScan)
-    }
+  /// Called when the researcher declares what's in the envelope (Scale, Fin
+  /// clip, or Both). Advances to the envelope-scan step where the barcode is
+  /// either scanned or typed.
+  func selectEnvelopeContents(_ contents: SampleContents) -> (message: String, nextStep: Step) {
+    sampleContents = contents
+    currentStep = .envelopeScan
+    return (
+      "Contents: \(contents.rawValue)\n§\nScan the envelope, or type the ID.",
+      .envelopeScan
+    )
   }
 
   // MARK: - Initial Estimate Snapshot

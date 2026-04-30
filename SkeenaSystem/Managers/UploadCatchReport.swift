@@ -115,8 +115,8 @@ nonisolated final class UploadCatchReport {
     let initialWeightLbs: Double?
     let floyId: String?
     let pitId: String?
-    let scaleCardId: String?
-    let dnaNumber: String?
+    let sampleEnvelopeId: String?
+    let sampleContents: [String]?
     let conservationOptIn: Bool?
     let mlTrainingOptOut: Bool?
     let location: Location?
@@ -711,8 +711,8 @@ nonisolated final class UploadCatchReport {
       initialWeightLbs: r.initialWeightLbs,
       floyId: r.floyId,
       pitId: r.pitId,
-      scaleCardId: r.scaleCardId,
-      dnaNumber: r.dnaNumber,
+      sampleEnvelopeId: r.sampleEnvelopeId,
+      sampleContents: r.sampleContents,
       conservationOptIn: r.conservationOptIn,
       mlTrainingOptOut: r.mlTrainingOptOut,
       location: location,

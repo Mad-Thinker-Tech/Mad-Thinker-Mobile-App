@@ -12,9 +12,17 @@ struct CatchChatView: View {
   // Voice memo sheet
   @State private var showVoiceNoteSheet = false
 
-  // Study/sample: show Yes/No first, then expand to type icons
+  // Envelope barcode scanner sheet — presented when the user taps the "Scan"
+  // capsule on the .envelopeScan step. The sheet returns either a parsed
+  // envelope ID (handed off to the VM) or a manual-entry signal (just dismiss
+  // and let the user type into the input bar).
+  @State private var showEnvelopeScanner = false
+
+  // Study: show Yes/No first, then expand to type icons. Sample collection no
+  // longer uses an icon-expansion pattern — the contents capsule row is posted
+  // directly to the bubble by `postEnvelopeContentsStep`, and the side icons
+  // for `.sampleCollection` are now just Yes/No.
   @State private var showStudyTypeIcons = false
-  @State private var showSampleTypeIcons = false
 
   /// Whether the chat uses the scientific visual style ("Science mode" label).
   private var isResearcherMode: Bool { viewModel.isResearcherMode }
@@ -48,7 +56,6 @@ struct CatchChatView: View {
         Spacer()
         Button {
           showStudyTypeIcons = false
-          showSampleTypeIcons = false
           viewModel.resetForNewCatch()
         } label: {
           HStack(spacing: 4) {
@@ -117,9 +124,6 @@ struct CatchChatView: View {
         .onChange(of: showStudyTypeIcons) { _ in
           scrollToBottom(proxy: proxy)
         }
-        .onChange(of: showSampleTypeIcons) { _ in
-          scrollToBottom(proxy: proxy)
-        }
       }
 
       // Subtle separator between messages and input
@@ -181,6 +185,29 @@ struct CatchChatView: View {
       if requested {
         showVoiceNoteSheet = true
         viewModel.requestVoiceNoteSheet = false
+      }
+    }
+    .sheet(isPresented: $showEnvelopeScanner) {
+      EnvelopeBarcodeScanner(
+        onScan: { id in
+          showEnvelopeScanner = false
+          viewModel.researcherRecordScannedEnvelope(id)
+        },
+        onManualEntry: {
+          // Dismiss the scanner; the chat input bar is always live so the
+          // user can immediately type the ID. Capsules on the bubble stay
+          // intact in case they change their mind.
+          showEnvelopeScanner = false
+        },
+        onCancel: {
+          showEnvelopeScanner = false
+        }
+      )
+    }
+    .onChange(of: viewModel.requestEnvelopeScannerSheet) { requested in
+      if requested {
+        showEnvelopeScanner = true
+        viewModel.requestEnvelopeScannerSheet = false
       }
     }
   }
@@ -245,19 +272,16 @@ struct CatchChatView: View {
           viewModel.researcherConfirm()
         }
       }
-    } else if step == .sampleCollection {
+    } else if step == .envelopeContents {
       HStack(spacing: 12) {
         choiceButton("Scale", icon: "fish.fill", disabled: false) {
-          viewModel.researcherSelectSample(.scale)
+          viewModel.researcherSelectEnvelopeContents(.scale)
         }
-        choiceButton("Fin Tip", icon: "scissors", disabled: false) {
-          viewModel.researcherSelectSample(.finTip)
+        choiceButton("Fin clip", icon: "scissors", disabled: false) {
+          viewModel.researcherSelectEnvelopeContents(.finClip)
         }
         choiceButton("Both", icon: "plus.circle.fill", disabled: false) {
-          viewModel.researcherSelectSample(.both)
-        }
-        choiceButton("No", icon: "forward.fill", disabled: false) {
-          viewModel.researcherConfirm()
+          viewModel.researcherSelectEnvelopeContents(.both)
         }
       }
     }
@@ -323,48 +347,23 @@ struct CatchChatView: View {
         }
       }
     } else if step == .sampleCollection {
-      if showSampleTypeIcons {
-        // Sample type options: Scale, Fin Tip, Both
-        Button {
-          showSampleTypeIcons = false
-          viewModel.researcherSelectSample(.scale)
-        } label: {
-          VStack(spacing: 4) {
-            Image(systemName: "fish.fill").font(.title3)
-            Text("Scale").font(.caption)
-          }
-        }
-
-        Button {
-          showSampleTypeIcons = false
-          viewModel.researcherSelectSample(.finTip)
-        } label: {
-          VStack(spacing: 4) {
-            Image(systemName: "scissors").font(.title3)
-            Text("Fin").font(.caption)
-          }
-        }
-
-        Button {
-          showSampleTypeIcons = false
-          viewModel.researcherSelectSample(.both)
-        } label: {
-          VStack(spacing: 4) {
-            Image(systemName: "plus.circle.fill").font(.title3)
-            Text("Both").font(.caption)
-          }
-        }
-      } else {
-        // Yes / No
-        Button { showSampleTypeIcons = true } label: {
-          Image(systemName: "checkmark.circle.fill").font(.title2)
-        }
-        Button {
-          viewModel.researcherConfirm()
-        } label: {
-          Image(systemName: "xmark.circle.fill").font(.title2)
-        }
+      // Yes (advance to .envelopeContents and post the contents capsule row)
+      // / No (skip to voice memo). The Yes path is handled in the VM.
+      Button {
+        viewModel.handleCapsuleTap(.sampleCollect(yes: true))
+      } label: {
+        Image(systemName: "checkmark.circle.fill").font(.title2)
       }
+      Button {
+        viewModel.researcherConfirm()
+      } label: {
+        Image(systemName: "xmark.circle.fill").font(.title2)
+      }
+    } else if step == .envelopeContents {
+      // Pure capsule-driven step (Scale / Fin clip / Both live on the bubble).
+      // The side column intentionally has no buttons here so the user's eye is
+      // drawn to the capsule row.
+      EmptyView()
     } else if step == .floyTagID {
       if let tag = viewModel.researcherFlow?.floyTagNumber, !tag.isEmpty {
         Button {
@@ -374,17 +373,17 @@ struct CatchChatView: View {
             .font(.title2)
         }
       }
-    } else if step == .scaleScan {
-      if let code = viewModel.researcherFlow?.scaleSampleBarcode, !code.isEmpty {
-        Button {
-          viewModel.researcherConfirm()
-        } label: {
-          Image(systemName: "checkmark.circle.fill")
-            .font(.title2)
-        }
+    } else if step == .envelopeScan {
+      // Show the camera-scan icon as a side affordance whenever the user is
+      // on this step — even before they've engaged the capsule on the bubble
+      // — so the scanner is one tap away. Once a barcode has been captured,
+      // also surface the Confirm checkmark.
+      Button {
+        viewModel.handleCapsuleTap(.openEnvelopeScanner)
+      } label: {
+        Image(systemName: "barcode.viewfinder").font(.title2)
       }
-    } else if step == .finTipScan {
-      if let code = viewModel.researcherFlow?.finTipSampleBarcode, !code.isEmpty {
+      if let code = viewModel.researcherFlow?.envelopeBarcode, !code.isEmpty {
         Button {
           viewModel.researcherConfirm()
         } label: {

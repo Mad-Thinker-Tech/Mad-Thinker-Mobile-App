@@ -1044,11 +1044,10 @@ private struct CatchReportDetailView: View {
   private var hasResearchTagData: Bool {
     report.floyId?.isEmpty == false
       || report.pitId?.isEmpty == false
-      || report.scaleCardId?.isEmpty == false
-      || report.dnaNumber?.isEmpty == false
+      || report.sampleEnvelopeId?.isEmpty == false
   }
 
-  /// Research tag IDs and sample barcodes. Only rendered when at least one
+  /// Research tag IDs and sample envelope. Only rendered when at least one
   /// field is populated (guarded by `hasResearchTagData` at the call site).
   private var researchTagsSection: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -1062,16 +1061,30 @@ private struct CatchReportDetailView: View {
       if let pit = report.pitId, !pit.isEmpty {
         infoRow(label: "PIT Tag", value: pit)
       }
-      if let scale = report.scaleCardId, !scale.isEmpty {
-        infoRow(label: "Scale Card", value: scale)
-      }
-      if let dna = report.dnaNumber, !dna.isEmpty {
-        infoRow(label: "DNA Sample", value: dna)
+      if let envelope = report.sampleEnvelopeId, !envelope.isEmpty {
+        infoRow(label: "Sample Envelope", value: envelope)
+        if let contents = report.sampleContents, !contents.isEmpty {
+          infoRow(label: "Contents", value: formattedSampleContents(contents))
+        }
       }
     }
     .padding()
     .background(Color.white.opacity(0.06))
     .cornerRadius(12)
+  }
+
+  /// Map the wire-format contents array (`["scale", "fin_clip"]`) to a
+  /// human-readable label ("Scale + Fin clip"). Reserved future values
+  /// (`"otolith"`, `"tissue"`, `"gut"`) get title-cased so they display
+  /// reasonably even before we add explicit labels.
+  private func formattedSampleContents(_ contents: [String]) -> String {
+    contents.map { value in
+      switch value {
+      case "scale": return "Scale"
+      case "fin_clip": return "Fin clip"
+      default: return value.replacingOccurrences(of: "_", with: " ").capitalized
+      }
+    }.joined(separator: " + ")
   }
 
   private var tripInfoSection: some View {

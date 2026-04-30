@@ -1,6 +1,6 @@
 {
   "version": "2026-04-30",
-  "generated": "2026-04-30T16:10:49.477Z",
+  "generated": "2026-04-30T18:45:53.323Z",
   "key_concepts": {
     "member_id": "UUID foreign key reference to a member record",
     "member_number": "Human-readable identifier in MAD Crockford Base32 format: MAD + 6 random chars (e.g., MAD4ZQ7H9)",
@@ -309,7 +309,7 @@
       "name": "Upload Catch Reports v5",
       "path": "/functions/v1/upload-catch-reports-v5",
       "method": "POST",
-      "description": "Upload catch reports with conservation research fields. Writes to catch_reports table. Supports dual photos (full fish + back of head), research identifiers (Floy ID, PIT ID, Scale Card ID, DNA #), initial and actual girth/weight, and conservation opt-in.",
+      "description": "Upload catch reports with conservation research fields. Writes to catch_reports table. Supports dual photos (full fish + back of head), research identifiers (Floy ID, PIT ID, sample envelope barcode + declared contents), initial and actual girth/weight, and conservation opt-in.",
       "auth": "required",
       "body": {
         "reportId": {
@@ -397,15 +397,15 @@
           "required": false,
           "description": "PIT tag alphanumeric ID"
         },
-        "catch.scaleCardId": {
+        "catch.sampleEnvelopeId": {
           "type": "string",
           "required": false,
-          "description": "Scale card barcode ID"
+          "description": "Scanned barcode of the physical sample envelope"
         },
-        "catch.dnaNumber": {
-          "type": "string",
+        "catch.sampleContents": {
+          "type": "string[]",
           "required": false,
-          "description": "DNA sample number"
+          "description": "Sample types declared inside the envelope. Allowed values: 'scale', 'fin_clip'. Required (non-empty, no duplicates) when sampleEnvelopeId is set; must be omitted/empty otherwise. Reserved future values: 'otolith', 'tissue', 'gut'."
         },
         "catch.conservationOptIn": {
           "type": "boolean",

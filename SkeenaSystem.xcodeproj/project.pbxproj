@@ -553,7 +553,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkeenaSystem/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mad Thinker";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access allows adding a photo of the catch";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access lets you photograph catches and scan sample-envelope barcodes";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Used for streamlined login";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location tags each catch report with the river or water body where you caught the fish, so you can find and share exactly where it happened.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use the microphone so you can record field notes";
@@ -600,7 +600,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkeenaSystem/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mad Thinker";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access allows adding a photo of the catch";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access lets you photograph catches and scan sample-envelope barcodes";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Used for streamlined login";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location tags each catch report with the river or water body where you caught the fish, so you can find and share exactly where it happened.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use the microphone so you can record field notes";
@@ -846,7 +846,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkeenaSystem/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mad Thinker";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access allows adding a photo of the catch";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access lets you photograph catches and scan sample-envelope barcodes";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Used for streamlined login";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location tags each catch report with the river or water body where you caught the fish, so you can find and share exactly where it happened.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use the microphone so you can record field notes";
@@ -984,7 +984,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkeenaSystem/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Mad Thinker";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access allows adding a photo of the catch";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access lets you photograph catches and scan sample-envelope barcodes";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Used for streamlined login";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location tags each catch report with the river or water body where you caught the fish, so you can find and share exactly where it happened.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use the microphone so you can record field notes";

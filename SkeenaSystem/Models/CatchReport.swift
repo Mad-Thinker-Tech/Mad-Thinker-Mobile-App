@@ -125,10 +125,16 @@ public struct CatchReport: Identifiable, Codable, Equatable {
   public var floyId: String?
   /// PIT tag ID — set when the researcher selected study type "Pit".
   public var pitId: String?
-  /// Scale card barcode — set when the researcher collected a scale sample.
-  public var scaleCardId: String?
-  /// DNA sample barcode/number — set when the researcher collected a DNA sample.
-  public var dnaNumber: String?
+  /// Scanned barcode of the physical sample envelope. One barcode per
+  /// envelope; what's *inside* is declared via `sampleContents`. Maps to the
+  /// v5 upload field `catch.sampleEnvelopeId`.
+  public var sampleEnvelopeId: String?
+  /// What's in the envelope. Wire format mirrors the backend
+  /// `catch.sampleContents` payload: `["scale"]`, `["fin_clip"]`, or
+  /// `["scale", "fin_clip"]`. Reserved future values: `"otolith"`,
+  /// `"tissue"`, `"gut"`. Must be non-empty when `sampleEnvelopeId` is set,
+  /// and nil/empty otherwise (validated server-side).
+  public var sampleContents: [String]?
 
   // Meta
   public var appVersion: String?
@@ -191,8 +197,8 @@ public struct CatchReport: Identifiable, Codable, Equatable {
     mlTrainingOptOut: Bool? = nil,
     floyId: String? = nil,
     pitId: String? = nil,
-    scaleCardId: String? = nil,
-    dnaNumber: String? = nil,
+    sampleEnvelopeId: String? = nil,
+    sampleContents: [String]? = nil,
     appVersion: String? = nil,
     deviceDescription: String? = nil,
     platform: String? = nil
@@ -252,8 +258,8 @@ public struct CatchReport: Identifiable, Codable, Equatable {
     self.mlTrainingOptOut = mlTrainingOptOut
     self.floyId = floyId
     self.pitId = pitId
-    self.scaleCardId = scaleCardId
-    self.dnaNumber = dnaNumber
+    self.sampleEnvelopeId = sampleEnvelopeId
+    self.sampleContents = sampleContents
     self.appVersion = appVersion
     self.deviceDescription = deviceDescription
     self.platform = platform

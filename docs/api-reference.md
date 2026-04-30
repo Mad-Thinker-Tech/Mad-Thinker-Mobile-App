@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
 **Version:** 2026-04-30
-**Generated:** 2026-04-30T16:10:48.947Z
+**Generated:** 2026-04-30T18:45:51.839Z
 
 ## Key Concepts
 
@@ -259,7 +259,7 @@ Upsert member field values. Accepts array of objects with field_name or field_de
 
 **POST** `/functions/v1/upload-catch-reports-v5`
 
-Upload catch reports with conservation research fields. Writes to catch_reports table. Supports dual photos (full fish + back of head), research identifiers (Floy ID, PIT ID, Scale Card ID, DNA #), initial and actual girth/weight, and conservation opt-in.
+Upload catch reports with conservation research fields. Writes to catch_reports table. Supports dual photos (full fish + back of head), research identifiers (Floy ID, PIT ID, sample envelope barcode + declared contents), initial and actual girth/weight, and conservation opt-in.
 
 **Auth:** required
 
@@ -284,8 +284,8 @@ Upload catch reports with conservation research fields. Writes to catch_reports 
 | catch.initialWeightLbs | number | ❌ | Initial weight estimate before correction |
 | catch.floyId | string | ❌ | Floy tag alphanumeric ID |
 | catch.pitId | string | ❌ | PIT tag alphanumeric ID |
-| catch.scaleCardId | string | ❌ | Scale card barcode ID |
-| catch.dnaNumber | string | ❌ | DNA sample number |
+| catch.sampleEnvelopeId | string | ❌ | Scanned barcode of the physical sample envelope |
+| catch.sampleContents | string[] | ❌ | Sample types declared inside the envelope. Allowed values: 'scale', 'fin_clip'. Required (non-empty, no duplicates) when sampleEnvelopeId is set; must be omitted/empty otherwise. Reserved future values: 'otolith', 'tissue', 'gut'. |
 | catch.conservationOptIn | boolean | ❌ | Conservation data sharing opt-in (default false) |
 | catch.mlTrainingOptOut | boolean | ❌ | Set true to opt this report OUT of being used to train ML models. Default false (data CAN be used). |
 | catch.location.lat | number | ❌ | Latitude |

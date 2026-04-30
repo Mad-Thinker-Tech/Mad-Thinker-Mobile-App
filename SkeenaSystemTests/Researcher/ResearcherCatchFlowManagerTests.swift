@@ -60,29 +60,23 @@ final class ResearcherCatchFlowManagerTests: XCTestCase {
     XCTAssertEqual(flow.currentStep, .floyTagID)
   }
 
-  /// Helper: advance to the scaleScan step via sample selection.
-  private func advanceToScaleScan() {
+  /// Helper: advance to the envelopeScan step via the contents-picker. Defaults
+  /// to `.scale` contents — tests that don't care about contents can use this;
+  /// tests that do should call `advanceToEnvelopeScan(contents:)` directly.
+  private func advanceToEnvelopeScan(
+    contents: ResearcherCatchFlowManager.SampleContents = .scale
+  ) {
     advanceToConfirmGirth()
     _ = flow.confirm() // → finalSummary
     _ = flow.confirm() // → studyParticipation
     _ = flow.confirm() // skip study → sampleCollection
     XCTAssertEqual(flow.currentStep, .sampleCollection)
-    _ = flow.selectSample(.scale) // → scaleScan
-    XCTAssertEqual(flow.currentStep, .scaleScan)
-  }
-
-  /// Helper: advance to the finTipScan step via "Both" sample selection.
-  private func advanceToFinTipScan() {
-    advanceToConfirmGirth()
-    _ = flow.confirm() // → finalSummary
-    _ = flow.confirm() // → studyParticipation
-    _ = flow.confirm() // skip study → sampleCollection
-    _ = flow.selectSample(.both) // → scaleScan
-    XCTAssertEqual(flow.currentStep, .scaleScan)
-    // Enter a scale card ID and confirm to advance to finTipScan
-    _ = flow.applyEdit("SC-001")
-    _ = flow.confirm() // scaleScan (both) → finTipScan
-    XCTAssertEqual(flow.currentStep, .finTipScan)
+    // sampleCollection "Yes" is wired in the view model (advances to
+    // .envelopeContents). At the flow-manager level we set the step directly
+    // and call selectEnvelopeContents so the same advance semantics apply.
+    flow.currentStep = .envelopeContents
+    _ = flow.selectEnvelopeContents(contents)
+    XCTAssertEqual(flow.currentStep, .envelopeScan)
   }
 
   // MARK: - Profanity rejection per step
@@ -135,26 +129,68 @@ final class ResearcherCatchFlowManagerTests: XCTestCase {
     XCTAssertTrue(result.message.contains("keep it civil"))
   }
 
-  func testProfanity_scaleScan_rejected() {
-    advanceToScaleScan()
+  func testProfanity_envelopeScan_rejected() {
+    advanceToEnvelopeScan()
 
     let result = flow.applyEdit("dick")
 
     XCTAssertFalse(result.recognized)
-    XCTAssertEqual(flow.currentStep, .scaleScan)
-    XCTAssertNil(flow.scaleSampleBarcode)
+    XCTAssertEqual(flow.currentStep, .envelopeScan)
+    XCTAssertNil(flow.envelopeBarcode)
     XCTAssertTrue(result.message.contains("keep it civil"))
   }
 
-  func testProfanity_finTipScan_rejected() {
-    advanceToFinTipScan()
+  // MARK: - Envelope-based sample collection
 
-    let result = flow.applyEdit("cunt")
+  /// One envelope, scale-only contents: applyEdit captures the typed barcode
+  /// and confirm() advances straight to voice memo (no second scan step).
+  func testEnvelopeScan_typedScaleOnly_advancesToVoiceMemo() {
+    advanceToEnvelopeScan(contents: .scale)
+    XCTAssertEqual(flow.sampleContents, .scale)
 
-    XCTAssertFalse(result.recognized)
-    XCTAssertEqual(flow.currentStep, .finTipScan)
-    XCTAssertNil(flow.finTipSampleBarcode)
-    XCTAssertTrue(result.message.contains("keep it civil"))
+    let edit = flow.applyEdit("SMP-A7K3F9")
+    XCTAssertTrue(edit.recognized)
+    XCTAssertEqual(flow.envelopeBarcode, "SMP-A7K3F9")
+
+    _ = flow.confirm()
+    XCTAssertEqual(flow.currentStep, .voiceMemo)
+  }
+
+  /// "Both" contents still produces a single envelope barcode — the contents
+  /// declaration is what tells the upload mapping to populate both legacy
+  /// fields. Verifies the flow doesn't accidentally re-introduce a second
+  /// scan step.
+  func testEnvelopeScan_bothContents_singleScanAdvancesToVoiceMemo() {
+    advanceToEnvelopeScan(contents: .both)
+    XCTAssertEqual(flow.sampleContents, .both)
+
+    _ = flow.applyEdit("SMP-B2M8Q1")
+    _ = flow.confirm()
+    XCTAssertEqual(flow.currentStep, .voiceMemo)
+    XCTAssertEqual(flow.envelopeBarcode, "SMP-B2M8Q1")
+  }
+
+  /// The scanner-sheet entry point bypasses applyEdit — `recordScannedEnvelope`
+  /// stores the parsed ID directly and produces the same confirmation copy as
+  /// the manual-entry path. Guards against the chat view drifting away from the
+  /// flow manager's storage shape.
+  func testEnvelopeScan_recordScanned_storesBarcodeAndPromptsConfirmation() {
+    advanceToEnvelopeScan(contents: .finClip)
+
+    let message = flow.recordScannedEnvelope(id: "A7K3F9")
+
+    XCTAssertEqual(flow.envelopeBarcode, "A7K3F9")
+    XCTAssertTrue(message.contains("Envelope: A7K3F9"))
+    XCTAssertTrue(message.contains("fin clip"))
+  }
+
+  /// Sample-contents wire format mirrors the planned backend `sampleContents`
+  /// payload. If this test fails, the upload mapping in CatchChatViewModel and
+  /// the Loveable backend contract have diverged.
+  func testSampleContents_wireValuesMatchBackendShape() {
+    XCTAssertEqual(ResearcherCatchFlowManager.SampleContents.scale.wireValues, ["scale"])
+    XCTAssertEqual(ResearcherCatchFlowManager.SampleContents.finClip.wireValues, ["fin_clip"])
+    XCTAssertEqual(ResearcherCatchFlowManager.SampleContents.both.wireValues, ["scale", "fin_clip"])
   }
 
   func testContainsProfanity_standaloneMatch() {
