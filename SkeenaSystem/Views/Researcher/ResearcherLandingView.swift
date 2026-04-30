@@ -111,15 +111,14 @@ struct ResearcherLandingView: View {
         if let donation = communityService.activeCommunityConfig.resolvedDonation {
           ToolbarItem(placement: .principal) {
             Link(destination: donation.url) {
-              Text("Donate")
-                .font(.caption)
-                .foregroundColor(.green)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.white))
-                .overlay(
-                  Capsule().stroke(Color.green, lineWidth: 1)
-                )
+              HStack(spacing: 6) {
+                Image(systemName: "leaf.fill")
+                  .font(.subheadline)
+                  .foregroundColor(.white)
+                Text("Donate")
+                  .font(.caption)
+                  .foregroundColor(.white)
+              }
             }
             .accessibilityIdentifier("communityDonationLink")
           }
