@@ -523,12 +523,12 @@ struct FishingForecastRequestView: View {
     }
 
     struct LooseWaterLevelEntry: Decodable {
-      let date: String?
+      let recordedAt: String?
       let levelFt: Double?
     }
 
     struct LooseWaterTemperatureEntry: Decodable {
-      let date: String?
+      let recordedAt: String?
       let tempC: Double?
     }
   }
@@ -613,19 +613,21 @@ struct FishingForecastRequestView: View {
       tides = nil
     }
 
-    // Water levels (empty if missing or malformed)
+    // Water levels — hourly time-series (~96 entries over the last 4 days).
+    // Drop entries with null timestamps or null values rather than zero-filling,
+    // so gaps in the source data don't masquerade as legitimate readings.
     let levels: [RiverConditionsResponse.WaterLevelEntry] =
       (loose.waterLevels ?? [])
         .compactMap { entry in
-          guard let d = entry.date, let v = entry.levelFt else { return nil }
-          return .init(date: d, levelFt: v)
+          guard let t = entry.recordedAt, let v = entry.levelFt else { return nil }
+          return .init(recordedAt: t, levelFt: v)
         }
 
     let temps: [RiverConditionsResponse.WaterTemperatureEntry]? =
       (loose.waterTemperatures ?? [])
         .compactMap { entry in
-          guard let d = entry.date, let v = entry.tempC else { return nil }
-          return .init(date: d, tempC: v)
+          guard let t = entry.recordedAt, let v = entry.tempC else { return nil }
+          return .init(recordedAt: t, tempC: v)
         }
 
     return RiverConditionsResponse(

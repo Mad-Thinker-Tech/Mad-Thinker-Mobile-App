@@ -222,9 +222,9 @@ River Name: Klamath River (California / Oregon)
 - **River length:** If the river is shorter than 50 miles, say so and only provide coordinates for its actual length.
 - **Forks:** Follow the main stem. If it ends at a fork confluence, note it and continue up the longer fork, clearly marking the transition.
 - **Multiple rivers:** Process all rivers, then output both files covering the full batch.
-- **Remote rivers:** Some rivers (especially in Alaska and northern BC) may have no gauge at all, or only a NOAA water prediction gauge. Note this clearly in the water stations file by leaving `station_id` blank.
+- **Remote rivers:** Some rivers (especially in Alaska and northern BC) may have no gauge at all, or only a NOAA water prediction gauge. Note this clearly in the fisheries configuration file by leaving `station_id` blank.
 - **Canadian vs US:** Use the correct agency names and source codes — `WSC` for Canadian rivers, `USGS` for US rivers. Don't mix them up.
-- **Cross-border rivers:** If a river crosses state/province boundaries, create one row per state/province in the water stations file, but keep the GPS coordinates as a single continuous block with the boundary noted.
+- **Cross-border rivers:** If a river crosses state/province boundaries, create one row per state/province in the fisheries configuration file, but keep the GPS coordinates as a single continuous block with the boundary noted.
 
 ---
 

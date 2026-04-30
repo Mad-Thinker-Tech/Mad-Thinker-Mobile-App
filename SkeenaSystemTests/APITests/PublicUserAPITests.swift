@@ -252,8 +252,8 @@ final class PublicUserAPITests: XCTestCase {
         let waterLevels: [WaterLevel]?
 
         struct WaterLevel: Decodable {
-            let date: String
-            let levelFt: Double
+            let recordedAt: String
+            let levelFt: Double?
         }
     }
 }

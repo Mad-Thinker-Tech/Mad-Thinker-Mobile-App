@@ -42,17 +42,27 @@ struct RiverConditionsResponse: Decodable {
     let type: String
   }
 
+  /// Hour-aligned water-level sample.
+  /// `recordedAt` is a UTC ISO 8601 timestamp (e.g. "2026-04-30T14:00:00.000Z");
+  /// callers convert to the device's local timezone for display.
   struct WaterLevelEntry: Decodable, Identifiable {
-    let date: String
+    let recordedAt: String
     let levelFt: Double
-    var id: String { date }
+    var id: String { recordedAt }
   }
 
+  /// Hour-aligned water-temperature sample. `recordedAt` is UTC ISO 8601.
   struct WaterTemperatureEntry: Decodable, Identifiable {
-    let date: String
+    let recordedAt: String
     let tempC: Double
-    var id: String { date }
+    var id: String { recordedAt }
   }
+}
+
+private enum ConditionsTab: String, CaseIterable, Identifiable {
+  case level = "Water Level"
+  case temperature = "Water Temperature"
+  var id: String { rawValue }
 }
 
 // MARK: - Root View
@@ -62,6 +72,9 @@ struct FishingForecastResultView: View {
 
   @StateObject private var auth = AuthService.shared
   @State private var showTactics = false
+  @State private var conditionsTab: ConditionsTab = .level
+
+  private var community: CommunityConfig { CommunityService.shared.activeCommunityConfig }
 
   var body: some View {
     ZStack {
@@ -77,8 +90,7 @@ struct FishingForecastResultView: View {
               tideWaveCard(tides: tides)
               tidesTextBlocks(tides: tides)
             }
-            waterLevelTrendSection
-            waterTemperatureSection
+            conditionsTabSection
             footer
           }
           .padding(.horizontal, 14)
@@ -166,9 +178,9 @@ struct FishingForecastResultView: View {
         .foregroundColor(isToday ? .blue.opacity(0.9) : .gray)
 
       VStack(spacing: 3) {
-        rowMetric("High", "\(number(day.highTempC))°C", highlight: isToday)
-        rowMetric("Low", "\(number(day.lowTempC))°C", highlight: isToday)
-        rowMetric("Precip", "\(number(day.precipitationMm)) mm", highlight: isToday)
+        rowMetric("High", "\(number(displayTempC(day.highTempC)))\(community.tempUnit)", highlight: isToday)
+        rowMetric("Low", "\(number(displayTempC(day.lowTempC)))\(community.tempUnit)", highlight: isToday)
+        rowMetric("Precip", "\(number(displayPrecipMm(day.precipitationMm))) \(precipitationUnit)", highlight: isToday)
       }
     }
     .padding(8)
@@ -196,7 +208,8 @@ struct FishingForecastResultView: View {
         previousHigh: tides.previousHigh,
         nextHigh: tides.nextHigh,
         previousLow: tides.previousLow,
-        nextLow: tides.nextLow
+        nextLow: tides.nextLow,
+        community: community
       )
       .frame(height: 140)
     }
@@ -253,34 +266,30 @@ struct FishingForecastResultView: View {
 
       Spacer(minLength: 0)
 
-      Text("\(number(point.heightM)) m")
+      Text("\(number(displayTideM(point.heightM))) \(tideHeightUnit)")
         .font(.footnote).bold()
         .foregroundColor(highlight ? .blue : .white)
         .frame(alignment: .trailing)
     }
   }
 
-  // MARK: - Water Level Trend
+  // MARK: - Conditions Tab (Water Level / Water Temperature)
 
-  private var waterLevelTrendSection: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Water Level (Last 4 Days)")
-        .font(.subheadline).foregroundColor(.white)
-        .accessibilityIdentifier("waterLevelHeader")
-
-      WaterLevelSparkline(levels: result.waterLevels)
-        .frame(height: 72)
-
-      HStack {
-        if let first = result.waterLevels.first {
-          Text("\(formattedDate(first.date)) • \(number(first.levelFt)) ft")
-            .font(.caption2).foregroundColor(.gray)
+  private var conditionsTabSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Picker("", selection: $conditionsTab) {
+        ForEach(ConditionsTab.allCases) { tab in
+          Text(tab.rawValue).tag(tab)
         }
-        Spacer()
-        if let last = result.waterLevels.last {
-          Text("\(formattedDate(last.date)) • \(number(last.levelFt)) ft")
-            .font(.caption2).foregroundColor(.white)
-        }
+      }
+      .pickerStyle(.segmented)
+      .accessibilityIdentifier("conditionsTabPicker")
+
+      switch conditionsTab {
+      case .level:
+        waterLevelTabContent
+      case .temperature:
+        waterTemperatureTabContent
       }
     }
     .padding(8)
@@ -288,39 +297,112 @@ struct FishingForecastResultView: View {
     .clipShape(RoundedRectangle(cornerRadius: 10))
   }
 
-  // MARK: - Water Temperature (Optional)
+  @ViewBuilder
+  private var waterLevelTabContent: some View {
+    let levels = result.waterLevels
+    if levels.isEmpty {
+      Text("Water level data unavailable")
+        .font(.footnote)
+        .foregroundColor(.gray)
+        .accessibilityIdentifier("waterLevelUnavailable")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    } else {
+      let last = levels.last!
+      VStack(alignment: .leading, spacing: 6) {
+        currentConditionsHeadline(value: "\(number(displayLevelFt(last.levelFt))) \(waterLevelUnit)")
+          .accessibilityIdentifier("waterLevelHeader")
 
-  private var waterTemperatureSection: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("Water Temperature (Last 4 Days)")
-        .font(.subheadline).foregroundColor(.white)
-        .accessibilityIdentifier("waterTempHeader")
+        WaterLevelSparkline(levels: levels)
+          .frame(height: chartHeight)
 
-      if let temps = result.waterTemperatures, !temps.isEmpty {
-        WaterTemperatureSparkline(temps: temps)
-          .frame(height: 72)
-
-        HStack {
-          if let first = temps.first {
-            Text("\(formattedDate(first.date)) • \(number(first.tempC)) °C")
-              .font(.caption2).foregroundColor(.gray)
-          }
-          Spacer()
-          if let last = temps.last {
-            Text("\(formattedDate(last.date)) • \(number(last.tempC)) °C")
-              .font(.caption2).foregroundColor(.white)
-          }
-        }
-      } else {
-        Text("Current water temperature unavailable")
-          .font(.footnote)
-          .foregroundColor(.gray)
-          .accessibilityIdentifier("waterTempUnavailable")
+        xAxisDateLabels(timestamps: levels.map(\.recordedAt))
       }
     }
-    .padding(8)
-    .background(Color.white.opacity(0.06))
-    .clipShape(RoundedRectangle(cornerRadius: 10))
+  }
+
+  @ViewBuilder
+  private var waterTemperatureTabContent: some View {
+    if let temps = result.waterTemperatures, !temps.isEmpty {
+      let last = temps.last!
+      VStack(alignment: .leading, spacing: 6) {
+        currentConditionsHeadline(value: "\(number(displayTempC(last.tempC)))\(community.tempUnit)")
+          .accessibilityIdentifier("waterTempHeader")
+
+        WaterTemperatureSparkline(temps: temps)
+          .frame(height: chartHeight)
+
+        xAxisDateLabels(timestamps: temps.map(\.recordedAt))
+      }
+    } else {
+      Text("Water temperature data unavailable")
+        .font(.footnote)
+        .foregroundColor(.gray)
+        .accessibilityIdentifier("waterTempUnavailable")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  // MARK: - Chart Chrome
+
+  private var chartHeight: CGFloat { 72 }
+
+  private func currentConditionsHeadline(value: String) -> some View {
+    Text("Current conditions: \(value)")
+      .font(.caption)
+      .foregroundColor(.gray)
+  }
+
+  /// One date label per local-TZ calendar day, centered horizontally beneath
+  /// that day's block of readings on the sparkline. The sparkline plots
+  /// entries at uniform index spacing, so a day's center maps to its
+  /// midpoint-index as a fraction of (count - 1).
+  private func xAxisDateLabels(timestamps: [String]) -> some View {
+    let runs = dayRuns(timestamps: timestamps)
+    let denominator = Double(Swift.max(timestamps.count - 1, 1))
+    return GeometryReader { geo in
+      ZStack(alignment: .topLeading) {
+        ForEach(runs.indices, id: \.self) { i in
+          let r = runs[i]
+          let centerIdx = Double(r.firstIndex + r.lastIndex) / 2.0
+          let xFrac = denominator == 0 ? 0.5 : centerIdx / denominator
+          Text(r.label)
+            .font(.caption2)
+            .foregroundColor(.gray)
+            .position(x: geo.size.width * CGFloat(xFrac), y: 8)
+        }
+      }
+    }
+    .frame(height: 16)
+  }
+
+  private struct DayRun {
+    let label: String
+    let firstIndex: Int
+    let lastIndex: Int
+  }
+
+  private func dayRuns(timestamps: [String]) -> [DayRun] {
+    var runs: [DayRun] = []
+    var currentKey: DateComponents?
+    var currentLabel: String?
+    var currentStart: Int = 0
+    let cal = Calendar.current
+    for (i, ts) in timestamps.enumerated() {
+      guard let d = parseDateTime(ts) else { continue }
+      let key = cal.dateComponents([.year, .month, .day], from: d)
+      if key != currentKey {
+        if let label = currentLabel {
+          runs.append(.init(label: label, firstIndex: currentStart, lastIndex: i - 1))
+        }
+        currentKey = key
+        currentLabel = DateFormatting.monthDay.string(from: d)
+        currentStart = i
+      }
+    }
+    if let label = currentLabel {
+      runs.append(.init(label: label, firstIndex: currentStart, lastIndex: timestamps.count - 1))
+    }
+    return runs
   }
 
   // MARK: - Footer
@@ -359,6 +441,38 @@ struct FishingForecastResultView: View {
     guard let d = parseDateTime(s) else { return s }
     return DateFormatting.shortTime.string(from: d)
   }
+
+  // MARK: - Unit Conversion Helpers
+  // Backend always returns: temps in °C, water level in ft, tide height in m,
+  // precipitation in mm. Convert here based on the active community's units.
+
+  private func displayTempC(_ celsius: Double) -> Double {
+    community.isImperial ? celsius * 9.0 / 5.0 + 32.0 : celsius
+  }
+
+  private func displayLevelFt(_ feet: Double) -> Double {
+    community.isImperial ? feet : feet * 0.3048
+  }
+
+  private var waterLevelUnit: String {
+    community.isImperial ? "ft" : "m"
+  }
+
+  private func displayTideM(_ meters: Double) -> Double {
+    community.isImperial ? meters * 3.28084 : meters
+  }
+
+  private var tideHeightUnit: String {
+    community.isImperial ? "ft" : "m"
+  }
+
+  private func displayPrecipMm(_ mm: Double) -> Double {
+    community.isImperial ? mm / 25.4 : mm
+  }
+
+  private var precipitationUnit: String {
+    community.isImperial ? "in" : "mm"
+  }
 }
 
 // MARK: - Tide Wave Graph
@@ -368,6 +482,12 @@ private struct TideWaveGraph: View {
   let nextHigh: RiverConditionsResponse.TidesPoint
   let previousLow: RiverConditionsResponse.TidesPoint
   let nextLow: RiverConditionsResponse.TidesPoint
+  let community: CommunityConfig
+
+  private var heightUnit: String { community.isImperial ? "ft" : "m" }
+  private func displayHeight(_ meters: Double) -> Double {
+    community.isImperial ? meters * 3.28084 : meters
+  }
 
   private struct TideSample {
     let date: Date
@@ -451,7 +571,7 @@ private struct TideWaveGraph: View {
           if !pts.isEmpty, !samples.isEmpty {
             let p = pts[0]; let s = samples[0]
             makeLabel(
-              text: "\(number(s.height)) m",
+              text: "\(number(displayHeight(s.height))) \(heightUnit)",
               color: s.isHigh ? .blue : .teal,
               at: p,
               index: 0,
@@ -463,7 +583,7 @@ private struct TideWaveGraph: View {
           if pts.count > 1, samples.count > 1 {
             let p = pts[1]; let s = samples[1]
             makeLabel(
-              text: "\(number(s.height)) m",
+              text: "\(number(displayHeight(s.height))) \(heightUnit)",
               color: s.isHigh ? .blue : .teal,
               at: p,
               index: 1,
@@ -475,7 +595,7 @@ private struct TideWaveGraph: View {
           if pts.count > 2, samples.count > 2 {
             let p = pts[2]; let s = samples[2]
             makeLabel(
-              text: "\(number(s.height)) m",
+              text: "\(number(displayHeight(s.height))) \(heightUnit)",
               color: s.isHigh ? .blue : .teal,
               at: p,
               index: 2,
@@ -487,7 +607,7 @@ private struct TideWaveGraph: View {
           if pts.count > 3, samples.count > 3 {
             let p = pts[3]; let s = samples[3]
             makeLabel(
-              text: "\(number(s.height)) m",
+              text: "\(number(displayHeight(s.height))) \(heightUnit)",
               color: s.isHigh ? .blue : .teal,
               at: p,
               index: 3,

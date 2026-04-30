@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
 **Version:** 2026-04-30
-**Generated:** 2026-04-30T18:45:51.839Z
+**Generated:** 2026-04-30T21:33:09.140Z
 
 ## Key Concepts
 
@@ -641,7 +641,7 @@ Current conditions and 8-hour hourly forecast based on GPS coordinates.
 
 **POST** `/functions/v1/river-conditions`
 
-Get river/water conditions (weather, tides, water levels, optional water temperatures) for a configured water body.
+Get river/water conditions (weather, tides, hourly water levels for the past 4 days, and optional hourly water temperatures) for a configured water body. Hourly readings are served from a backend cache populated every hour by an automated collector; if the cache is empty or stale (e.g. station was just added), the function falls back to a live upstream fetch.
 
 **Auth:** required
 
@@ -652,7 +652,7 @@ Get river/water conditions (weather, tides, water levels, optional water tempera
 | date | string (YYYY-MM-DD) | ✅ | Target date |
 | river | string | ✅ | Water body name (must be active for the community) |
 | community_id | uuid | ❌ | Community UUID. Inferred from JWT if user has a single membership. |
-| include_water_temperature | boolean | ❌ | Include daily water temperatures when the gauge supports it. |
+| include_water_temperature | boolean | ❌ | Include hourly water temperatures when the gauge supports it. |
 
 **Response:**
 
@@ -664,8 +664,8 @@ Get river/water conditions (weather, tides, water levels, optional water tempera
 - `date`: string — echoed target date (YYYY-MM-DD)
 - `weather`: object — { previous_day, target_day, next_day } each with high/low temp °C and precipitation mm
 - `tides`: object — { previous_high, next_high, previous_low, next_low } (all null when isTidal is false)
-- `water_levels`: array — last 4 days of daily-average water level in feet
-- `water_temperatures`: array (optional) — last 4 days of daily-average water temperature in °C, only when include_water_temperature=true
+- `water_levels`: array — hourly water level for the past 4 days (~96 entries). Each entry: { recorded_at: ISO timestamp (hour-aligned, UTC), level_ft: number | null }. Empty when the fishery has no gauge.
+- `water_temperatures`: array (optional) — hourly water temperature for the past 4 days (~96 entries). Each entry: { recorded_at: ISO timestamp (hour-aligned, UTC), temp_c: number | null }. Returned only when include_water_temperature=true.
 
 ---
 
