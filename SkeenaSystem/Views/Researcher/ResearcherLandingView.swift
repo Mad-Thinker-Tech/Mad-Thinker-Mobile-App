@@ -116,6 +116,7 @@ struct ResearcherLandingView: View {
                 .foregroundColor(.green)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
+                .background(Capsule().fill(Color.white))
                 .overlay(
                   Capsule().stroke(Color.green, lineWidth: 1)
                 )
