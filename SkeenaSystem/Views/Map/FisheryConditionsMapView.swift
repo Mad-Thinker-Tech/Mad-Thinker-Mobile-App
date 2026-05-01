@@ -26,11 +26,12 @@ struct FisheryConditionsMapView<Callout: View>: View {
   /// Rendered when any pin is tapped. Receives the tapped annotation +
   /// dismiss callback.
   let calloutBuilder: (FisheryConditionsAnnotation, @escaping () -> Void) -> Callout
-  /// Coordinate to focus the camera on when no pins exist. Caller is
-  /// expected to supply the fishery's GPS center (river spine midpoint /
-  /// water-body polygon centroid). Nil → falls back to the community
-  /// default in `initialViewport`.
-  var fallbackCenter: CLLocationCoordinate2D? = nil
+  /// Coordinates describing the fishery's geographic extent (river spine
+  /// or water-body polygon). When non-empty AND no pins exist, Mapbox
+  /// auto-frames the camera to fit the whole geometry — so the camera
+  /// shows the entire river even if pins are sparse / off-shore.
+  /// Empty → falls back to the community default in `initialViewport`.
+  var fisheryGeometry: [CLLocationCoordinate2D] = []
 
   @State private var selectedAnnotation: FisheryConditionsAnnotation? = nil
 
@@ -58,10 +59,11 @@ struct FisheryConditionsMapView<Callout: View>: View {
 
   // MARK: - Initial viewport
 
-  /// Center on the most recent annotation; if there are none, fall back to
-  /// the caller-supplied fishery center, then the community default. The
-  /// user's own GPS is intentionally NOT consulted — the guide is recalling
-  /// conditions at *this fishery*, not where they happen to be standing.
+  /// Center on the most recent annotation; if there are none, frame the
+  /// fishery's full geometry so the entire river / water body is on screen.
+  /// Final fallback: the community default. The user's own GPS is
+  /// intentionally NOT consulted — the guide is recalling conditions at
+  /// *this fishery*, not where they happen to be standing.
   private var initialViewport: Viewport {
     let recent = annotations.sorted {
       ($0.report.date) > ($1.report.date)
@@ -69,8 +71,19 @@ struct FisheryConditionsMapView<Callout: View>: View {
     if let r = recent {
       return .camera(center: r.coordinate, zoom: 9, bearing: 0, pitch: 0)
     }
-    if let center = fallbackCenter {
-      return .camera(center: center, zoom: 10, bearing: 0, pitch: 0)
+    if fisheryGeometry.count >= 2 {
+      // .overview auto-computes center + zoom to fit the geometry. maxZoom
+      // caps the inward zoom for tiny lakes; padding keeps pins from
+      // hugging the screen edge.
+      let line = LineString(fisheryGeometry)
+      return .overview(
+        geometry: line,
+        geometryPadding: SwiftUI.EdgeInsets(top: 32, leading: 32, bottom: 32, trailing: 32),
+        maxZoom: 12
+      )
+    }
+    if let single = fisheryGeometry.first {
+      return .camera(center: single, zoom: 10, bearing: 0, pitch: 0)
     }
     let config = CommunityService.shared.activeCommunityConfig
     if let lat = config.resolvedDefaultMapLatitude,
@@ -110,6 +123,15 @@ struct FisheryConditionsMapView<Callout: View>: View {
       }
     }
     .mapStyle(.satelliteStreets)
+    // Drop the callout when its underlying pin gets filtered out of the
+    // current report set (e.g. user toggles "All" off and the pin no
+    // longer satisfies the ±10% gate). Without this, the callout persists
+    // over the empty map even though the pin is gone.
+    .onChange(of: reports.map(\.id)) { newIds in
+      if let s = selectedAnnotation, !newIds.contains(s.id) {
+        selectedAnnotation = nil
+      }
+    }
   }
 
   @MapContentBuilder

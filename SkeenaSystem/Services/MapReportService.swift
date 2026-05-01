@@ -102,7 +102,14 @@ enum MapReportService {
     let decoded = try JSONDecoder().decode(MapReportsResponse.self, from: data)
     AppLogging.log({ "[MapReports] Decoded \(decoded.count) reports — types: \(decoded.reports.map(\.type).joined(separator: ", "))" }, level: .info, category: .map)
     for r in decoded.reports {
-      AppLogging.log({ "[MapReports]   id=\(r.id) type=\(r.type) lat=\(r.latitude.map { String($0) } ?? "nil") lon=\(r.longitude.map { String($0) } ?? "nil")" }, level: .debug, category: .map)
+      AppLogging.log({
+        let lat = r.latitude.map { String($0) } ?? "nil"
+        let lon = r.longitude.map { String($0) } ?? "nil"
+        let river = r.river.map { "\"\($0)\"" } ?? "nil"
+        let temp = r.waterTempC.map { String($0) } ?? "nil"
+        let level = r.waterLevelFt.map { String($0) } ?? "nil"
+        return "[MapReports]   id=\(r.id) type=\(r.type) lat=\(lat) lon=\(lon) river=\(river) tempC=\(temp) levelFt=\(level)"
+      }, level: .debug, category: .map)
     }
     return decoded.reports
   }

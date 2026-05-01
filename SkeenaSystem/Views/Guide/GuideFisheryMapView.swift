@@ -128,44 +128,37 @@ struct GuideFisheryMapView: View {
     return tokens.joined(separator: " ")
   }
 
-  // MARK: - Fishery center resolution
+  // MARK: - Fishery geometry resolution
 
-  /// Best-effort GPS center for the active fishery — used as the camera
-  /// fallback when no pins exist for this fishery yet. Tries:
-  ///   1) Exact match in RiverAtlas (river spine midpoint)
-  ///   2) Fuzzy-normalized match in RiverAtlas (handles abbreviations)
-  ///   3) Exact match in WaterBodyAtlas (polygon vertex centroid)
+  /// Full set of coordinates describing this fishery — river spine for
+  /// rivers, polygon vertices for water bodies. Passed to the inner map so
+  /// Mapbox can frame the camera to fit the whole fishery when no pins
+  /// exist yet. Lookup order:
+  ///   1) Exact match in RiverAtlas (full spine)
+  ///   2) Fuzzy-normalized match in RiverAtlas
+  ///   3) Exact match in WaterBodyAtlas (full polygon)
   ///   4) Fuzzy-normalized match in WaterBodyAtlas
-  /// Returns nil when nothing matches; the inner map then falls back to the
-  /// community default.
-  private var fisheryCenterCoordinate: CLLocationCoordinate2D? {
+  /// Returns [] when nothing matches; the inner map then falls back to the
+  /// community default viewport.
+  private var fisheryGeometry: [CLLocationCoordinate2D] {
     if let spine = RiverAtlas.all[riverName], !spine.isEmpty {
-      return spine[spine.count / 2]
+      return spine
     }
     let targetCore = Self.normalizeRiverName(riverName)
     if let match = RiverAtlas.all.first(where: {
       Self.normalizeRiverName($0.key) == targetCore && !$0.value.isEmpty
     }) {
-      return match.value[match.value.count / 2]
+      return match.value
     }
     if let polygon = WaterBodyAtlas.all[riverName], !polygon.isEmpty {
-      return polygonCentroid(polygon)
+      return polygon
     }
     if let match = WaterBodyAtlas.all.first(where: {
       Self.normalizeRiverName($0.key) == targetCore && !$0.value.isEmpty
     }) {
-      return polygonCentroid(match.value)
+      return match.value
     }
-    return nil
-  }
-
-  /// Coarse centroid: average of polygon vertex lat/lon. Good enough for
-  /// camera framing — the geometric centroid would be marginally better
-  /// for non-convex shapes but isn't worth the math here.
-  private func polygonCentroid(_ vertices: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
-    let lat = vertices.reduce(0.0) { $0 + $1.latitude } / Double(vertices.count)
-    let lon = vertices.reduce(0.0) { $0 + $1.longitude } / Double(vertices.count)
-    return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    return []
   }
 
   // MARK: - Body
@@ -184,6 +177,13 @@ struct GuideFisheryMapView: View {
     .navigationBarTitleDisplayMode(.inline)
     .task(id: fetchKey) {
       await fetchMapReports()
+    }
+    .onChange(of: showAll) { _ in
+      // Re-trace so the log reflects the new toggle state without forcing
+      // the user to re-fetch (showAll is a client-side filter only). Using
+      // the iOS 16-compatible single-parameter form since deployment target
+      // is 16.6.
+      logFilterTrace(reason: "showAll toggle")
     }
   }
 
@@ -316,7 +316,7 @@ struct GuideFisheryMapView: View {
               onDismiss: dismiss
             )
           },
-          fallbackCenter: fisheryCenterCoordinate
+          fisheryGeometry: fisheryGeometry
         )
 
         if isFetching {
@@ -377,10 +377,83 @@ struct GuideFisheryMapView: View {
         memberId: nil,
         fromDate: timeWindow.fromDate()
       )
-      await MainActor.run { mapReports = reports }
+      await MainActor.run {
+        mapReports = reports
+        logFilterTrace(reason: "fetch complete")
+      }
     } catch {
       AppLogging.log("[FisheryMap] fetch failed: \(error.localizedDescription)", level: .error, category: .map)
     }
+  }
+
+  /// Logs every report's per-gate verdict (river / metrics) plus the inputs
+  /// the filter is comparing against. Triggered after a fetch and whenever
+  /// the "All" toggle flips. Use this to diagnose "I just saved a catch but
+  /// it didn't show" — the trace identifies exactly which gate rejected
+  /// the pin.
+  private func logFilterTrace(reason: String) {
+    let targetCore = Self.normalizeRiverName(riverName)
+    let currentTemp = currentWaterTempC.map { String($0) } ?? "nil"
+    let currentLevel = currentWaterLevelFt.map { String($0) } ?? "nil"
+    AppLogging.log(
+      "[FisheryMap] trace (\(reason)): river=\"\(riverName)\" core=\"\(targetCore)\" currentTempC=\(currentTemp) currentLevelFt=\(currentLevel) showAll=\(showAll) reports=\(mapReports.count)",
+      level: .info,
+      category: .map
+    )
+
+    for r in mapReports {
+      AppLogging.log({ verdictLine(for: r, targetCore: targetCore) },
+                     level: .info, category: .map)
+    }
+  }
+
+  private func verdictLine(for r: MapReportDTO, targetCore: String) -> String {
+    let id = r.id
+    let type = r.type
+    let rawRiver = r.river.map { "\"\($0)\"" } ?? "nil"
+
+    // 1. River gate
+    guard let reportRiverRaw = r.river,
+          !reportRiverRaw.trimmingCharacters(in: .whitespaces).isEmpty else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (river field missing/empty) river=\(rawRiver)"
+    }
+    let reportCore = Self.normalizeRiverName(reportRiverRaw)
+    guard !reportCore.isEmpty, reportCore == targetCore else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (river mismatch) river=\(rawRiver) reportCore=\"\(reportCore)\" targetCore=\"\(targetCore)\""
+    }
+
+    // 2. "All" override
+    if showAll {
+      let tempStr = r.waterTempC.map { "\($0)" } ?? "nil"
+      let levelStr = r.waterLevelFt.map { "\($0)" } ?? "nil"
+      return "[FisheryMap]   \(id) type=\(type) → KEEP (showAll) river=\(rawRiver) tempC=\(tempStr) levelFt=\(levelStr)"
+    }
+
+    // 3. Temp gate
+    guard let reportTempC = r.waterTempC else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (water_temp_c missing) river=\(rawRiver)"
+    }
+    guard let currentTempC = currentWaterTempC else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (current water temp unavailable) reportTempC=\(reportTempC)"
+    }
+    if !Self.withinTenPercent(report: reportTempC, current: currentTempC) {
+      let pct: Double = currentTempC == 0 ? .infinity : abs(reportTempC - currentTempC) / abs(currentTempC) * 100
+      return "[FisheryMap]   \(id) type=\(type) → DROP (temp out of band) reportTempC=\(reportTempC) currentTempC=\(currentTempC) deltaPct=\(String(format: "%.1f", pct))%"
+    }
+
+    // 4. Level gate
+    guard let reportLevelFt = r.waterLevelFt else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (water_level_ft missing) river=\(rawRiver)"
+    }
+    guard let currentLevelFt = currentWaterLevelFt else {
+      return "[FisheryMap]   \(id) type=\(type) → DROP (current water level unavailable) reportLevelFt=\(reportLevelFt)"
+    }
+    if !Self.withinTenPercent(report: reportLevelFt, current: currentLevelFt) {
+      let pct: Double = currentLevelFt == 0 ? .infinity : abs(reportLevelFt - currentLevelFt) / abs(currentLevelFt) * 100
+      return "[FisheryMap]   \(id) type=\(type) → DROP (level out of band) reportLevelFt=\(reportLevelFt) currentLevelFt=\(currentLevelFt) deltaPct=\(String(format: "%.1f", pct))%"
+    }
+
+    return "[FisheryMap]   \(id) type=\(type) → KEEP (within ±10%) tempC=\(reportTempC) levelFt=\(reportLevelFt)"
   }
 
   // MARK: - Display formatting
