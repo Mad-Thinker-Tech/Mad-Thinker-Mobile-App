@@ -72,17 +72,28 @@ struct FishingForecastResultView: View {
 
   @StateObject private var auth = AuthService.shared
   @State private var showTactics = false
+  @State private var showFisheryMap = false
   @State private var conditionsTab: ConditionsTab = .level
 
   private var community: CommunityConfig { CommunityService.shared.activeCommunityConfig }
+
+  /// Most-recent water temp in °C, derived from the same hourly series that
+  /// powers the on-screen sparkline. Passed to the conditions-recall map so
+  /// it can compare each pin's recorded value to "now" without re-fetching.
+  private var currentWaterTempC: Double? {
+    result.waterTemperatures?.last?.tempC
+  }
+
+  /// Most-recent water level in feet — same idea as `currentWaterTempC`.
+  private var currentWaterLevelFt: Double? {
+    result.waterLevels.last?.levelFt
+  }
 
   var body: some View {
     ZStack {
       Color.black.ignoresSafeArea()
 
       VStack(spacing: 12) {
-        headerRow // ⬅️ "Get Tactics" aligned to the right
-
         ScrollView {
           VStack(spacing: 12) {
             weatherThreeDayCompact
@@ -106,6 +117,13 @@ struct FishingForecastResultView: View {
         river: result.river
       )
     }
+    .navigationDestination(isPresented: $showFisheryMap) {
+      GuideFisheryMapView(
+        riverName: result.river,
+        currentWaterTempC: currentWaterTempC,
+        currentWaterLevelFt: currentWaterLevelFt
+      )
+    }
     // Custom 2-line nav title: river + Using Station
     .toolbar {
       ToolbarItem(placement: .principal) {
@@ -119,38 +137,37 @@ struct FishingForecastResultView: View {
             .foregroundColor(.secondary)
         }
       }
-    }
-  }
 
-  // MARK: - Header Row: "Get Tactics" pushed to the right
-
-  private var headerRow: some View {
-    HStack {
-      Spacer()
-
-      if auth.currentUserType == .guide, AppEnvironment.shared.tacticsEnabled {
-        Button {
-          showTactics = true
-        } label: {
-          Text("Get Tactics")
-            .font(.caption).bold()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-              Capsule()
-                .fill(Color.blue.opacity(0.9))
-            )
-            .overlay(
-              Capsule()
-                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-            )
-            .foregroundColor(.white)
+      // Conditions-recall map. Guide-only — gated through GuideFisheryMapView
+      // so the predicate has one home and ConditionsRecallRegressionTests
+      // can lock it down.
+      if GuideFisheryMapView.canAccess(role: auth.currentUserType) {
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button {
+            showFisheryMap = true
+          } label: {
+            Image(systemName: "map")
+              .foregroundColor(.white)
+          }
+          .accessibilityIdentifier("conditionsRecallMapButton")
         }
-        .buttonStyle(.plain)
+      }
+
+      // Tactics recommendations. Same gating as before; the in-content
+      // capsule was retired in favor of a navbar icon to free up vertical
+      // space at the top of the conditions card stack.
+      if auth.currentUserType == .guide, AppEnvironment.shared.tacticsEnabled {
+        ToolbarItem(placement: .navigationBarTrailing) {
+          Button {
+            showTactics = true
+          } label: {
+            Image(systemName: "lightbulb")
+              .foregroundColor(.white)
+          }
+          .accessibilityIdentifier("getTacticsButton")
+        }
       }
     }
-    .padding(.horizontal, 14)
-    .padding(.top, 8)
   }
 
   // MARK: - 3-Day Weather

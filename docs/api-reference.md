@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
-**Version:** 2026-04-30
-**Generated:** 2026-04-30T21:33:09.140Z
+**Version:** 2026-05-01
+**Generated:** 2026-05-01T17:19:49.732Z
 
 ## Key Concepts
 
@@ -425,11 +425,12 @@ Unified catch and no-catch map pin data. Role-based: members see own data, guide
 
 **Response:**
 
-- `reports`: array of { type, lat, lon, river, created_at, species?, lengthInches?, eventType? }
+- `reports`: array of { type, lat, lon, river, created_at, water_temp_c, water_level_ft, species?, lengthInches?, eventType? }
 
 **Notes:**
 
 - type is one of: catch, active, farmed, promising, passed
+- water_temp_c (Celsius) and water_level_ft (feet) come from server-side enrichment; null if the report has not been enriched or the value was unavailable.
 
 ---
 

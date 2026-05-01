@@ -1,16 +1,15 @@
 // Bend Fly Shop
 //
 // GuideFullMapView.swift — Full-page version of the guide-landing map. Reached
-// from the expand button on the landing tile. Adds a filter bar above the map
-// with three controls:
+// from the expand button on the landing tile. Filter bar above the map:
 //
 //   • Time window — server-side (re-fetches when changed). Defaults to
 //     "Last 30 days" so a busy community doesn't dump 3 years of pins on open.
-//   • Mine / All — server-side (member_id). Defaults to "All" to mirror the
-//     landing tile's behavior on first open.
-//   • Pin type chips — client-side, multi-select, all on by default. Acts as
-//     the legend, so the static GuideLandingMapLegend is intentionally dropped
-//     here.
+//   • Catch / No Catch chips — client-side, multi-select, both on by default.
+//     Right-justified on the same row as the time window. Active=blue,
+//     inactive=grey. The footer legend still decodes the 5-color breakdown.
+//
+// Map is always community-wide (member_id = nil); per-member scope was removed.
 
 import CoreLocation
 import SwiftUI
@@ -51,17 +50,6 @@ enum GuideMapTimeWindow: String, CaseIterable, Identifiable {
   }
 }
 
-enum GuideMapScope: String, CaseIterable, Identifiable {
-  case community, personal
-  var id: String { rawValue }
-  var label: String {
-    switch self {
-    case .community: return "Community"
-    case .personal:  return "Personal"
-    }
-  }
-}
-
 /// Two-bucket categorization of pin types. Chips control which buckets are
 /// visible; the footer legend still shows the underlying 5-color breakdown.
 enum GuideMapPinCategory: String, CaseIterable, Identifiable {
@@ -86,16 +74,6 @@ enum GuideMapPinCategory: String, CaseIterable, Identifiable {
     case .noCatch: return ["active", "farmed", "promising", "passed"]
     }
   }
-
-  /// Indicator dot color shown on the chip. Catch uses the catch pin color;
-  /// "No Catch" uses a neutral grey because it spans 4 colors — the footer
-  /// legend decodes them.
-  var chipDotColor: UIColor {
-    switch self {
-    case .catch_:  return .systemBlue
-    case .noCatch: return .systemGray3
-    }
-  }
 }
 
 // MARK: - View
@@ -109,11 +87,11 @@ struct GuideFullMapView: View {
 
   // Filter state
   @State private var timeWindow: GuideMapTimeWindow = .thirtyDays
-  @State private var scope: GuideMapScope = .community
   @State private var enabledCategories: Set<GuideMapPinCategory> = Set(GuideMapPinCategory.allCases)
 
-  // Re-fetch key — only the server-side filters drive a network call.
-  private var fetchKey: String { "\(timeWindow.rawValue)|\(scope.rawValue)" }
+  // Re-fetch key — only the server-side filter (time window) drives a network
+  // call. Map is always community-wide.
+  private var fetchKey: String { timeWindow.rawValue }
 
   // Union of every enabled category's underlying API types, then filter
   // the in-memory pin list. Done as a computed property so chip toggles
@@ -149,13 +127,12 @@ struct GuideFullMapView: View {
   // MARK: - Filter bar
 
   private var filterBar: some View {
-    VStack(spacing: 8) {
-      HStack(spacing: 10) {
-        timeMenu
-        Spacer(minLength: 8)
-        scopeToggle
+    HStack(spacing: 8) {
+      timeMenu
+      Spacer(minLength: 8)
+      ForEach(GuideMapPinCategory.allCases) { category in
+        categoryChip(category)
       }
-      typeChipRow
     }
     .padding(.horizontal, 12)
     .padding(.top, 10)
@@ -193,41 +170,8 @@ struct GuideFullMapView: View {
     .accessibilityIdentifier("mapTimeWindowMenu")
   }
 
-  private var scopeToggle: some View {
-    HStack(spacing: 0) {
-      ForEach(GuideMapScope.allCases) { option in
-        Button {
-          scope = option
-        } label: {
-          Text(option.label)
-            .font(.caption.weight(.semibold))
-            .foregroundColor(scope == option ? .black : .white.opacity(0.85))
-            .frame(minWidth: 78) // wide enough for "Community"
-            .padding(.vertical, 6)
-            .background(
-              Capsule().fill(scope == option ? Color.white : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
-      }
-    }
-    .padding(2)
-    .background(Color.white.opacity(0.10), in: Capsule())
-    .accessibilityIdentifier("mapScopeToggle")
-  }
-
-  private var typeChipRow: some View {
-    HStack(spacing: 8) {
-      ForEach(GuideMapPinCategory.allCases) { category in
-        categoryChip(category)
-      }
-      Spacer(minLength: 0)
-    }
-  }
-
   private func categoryChip(_ category: GuideMapPinCategory) -> some View {
     let isOn = enabledCategories.contains(category)
-    let dot = Color(category.chipDotColor)
     return Button {
       if isOn {
         // Don't allow deselecting the last category — an empty filter set
@@ -237,25 +181,15 @@ struct GuideFullMapView: View {
         enabledCategories.insert(category)
       }
     } label: {
-      HStack(spacing: 6) {
-        Circle()
-          .fill(dot)
-          .frame(width: 8, height: 8)
-        Text(category.label)
-          .font(.caption.weight(.semibold))
-          .foregroundColor(isOn ? .white : .white.opacity(0.45))
-      }
-      .padding(.horizontal, 12)
-      .padding(.vertical, 7)
-      .background(
-        Capsule()
-          .fill(isOn ? dot.opacity(0.22) : Color.white.opacity(0.05))
-      )
-      .overlay(
-        Capsule()
-          .stroke(isOn ? dot.opacity(0.7) : Color.white.opacity(0.12),
-                  lineWidth: 1)
-      )
+      Text(category.label)
+        .font(.caption.weight(.semibold))
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+          Capsule()
+            .fill(isOn ? Color.blue : Color.white.opacity(0.18))
+        )
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("mapCategoryChip_\(category.rawValue)")
@@ -339,19 +273,10 @@ struct GuideFullMapView: View {
       return
     }
 
-    let memberId: String? = {
-      switch scope {
-      case .community: return nil
-      case .personal:
-        let id = (AuthService.shared.currentMemberId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return id.isEmpty ? nil : id
-      }
-    }()
-
     do {
       let reports = try await MapReportService.fetch(
         communityId: communityId,
-        memberId: memberId,
+        memberId: nil,
         fromDate: timeWindow.fromDate()
       )
       await MainActor.run { mapReports = reports }

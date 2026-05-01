@@ -689,11 +689,5 @@ final class GuideRegressionTests: XCTestCase {
                    "Catch + No Catch must together cover every server-side pin type")
   }
 
-  // MARK: - Scope labels
-
-  func testGuideMapScope_labels_areCommunityAndPersonal() {
-    XCTAssertEqual(GuideMapScope.community.label, "Community")
-    XCTAssertEqual(GuideMapScope.personal.label, "Personal")
-  }
 }
 

@@ -13,6 +13,24 @@ struct MapReportDTO: Decodable, Identifiable {
   let species: String?
   let lengthInches: Int?
   let memberId: String?
+  /// River name the report was filed against. Used by the conditions-recall
+  /// fishery map to scope pins to a single fishery.
+  let river: String?
+  /// Water temperature recorded with the report, in °C. NULL when the report
+  /// pre-dates server-side enrichment or the gauge value was unavailable.
+  /// Consumed by the conditions-recall fishery map.
+  let waterTempC: Double?
+  /// Water level recorded with the report, in feet. NULL — same as above.
+  let waterLevelFt: Double?
+
+  // Existing fields (`lengthInches`, `memberId`) come back camelCase from the
+  // API; the new fields (`river`, `water_temp_c`, `water_level_ft`) come back
+  // snake_case. Explicit keys keep both conventions honest in one place.
+  private enum CodingKeys: String, CodingKey {
+    case id, type, date, latitude, longitude, species, lengthInches, memberId, river
+    case waterTempC = "water_temp_c"
+    case waterLevelFt = "water_level_ft"
+  }
 }
 
 struct MapReportsResponse: Decodable {
