@@ -649,19 +649,43 @@ final class CatchPhotoAnalyzer {
     let label = output.classLabel.lowercased() // "female" or "male"
 
     // The ViTFishSex CoreML package exposes a `classLabel_probs` dictionary
-    // alongside the raw label. Pull the probability for the winning class via
-    // the MLFeatureProvider API so we don't depend on the auto-generated
-    // Swift property name (which can vary across Xcode versions).
+    // alongside the raw label. Pull the values for each class via the
+    // MLFeatureProvider API so we don't depend on the auto-generated Swift
+    // property name (which can vary across Xcode versions).
+    //
+    // The exported model pipes the linear classifier head straight into
+    // CoreML's `classify` op without a softmax in between, so the dict
+    // values are raw logits, not probabilities — without normalization the
+    // chat capsule renders things like 520% for the predicted sex. We
+    // detect the logits case (out-of-range or sum != 1) and softmax before
+    // reading the winner's probability, while leaving already-normalized
+    // outputs alone in case a future retrain bakes softmax into the model.
     var confidence: Float = 0
     if let dict = output.featureValue(for: "classLabel_probs")?.dictionaryValue {
-      // Keys may be the original-case labels — match case-insensitively.
-      let normalized = dict.reduce(into: [String: NSNumber]()) { acc, kv in
-        if let key = kv.key as? String, let prob = kv.value as? NSNumber {
-          acc[key.lowercased()] = prob
+      var values: [(label: String, value: Float)] = []
+      for (k, v) in dict {
+        if let key = k as? String, let prob = v as? NSNumber {
+          values.append((label: key.lowercased(), value: prob.floatValue))
         }
       }
-      if let prob = normalized[label] {
-        confidence = prob.floatValue
+
+      let sum = values.reduce(Float(0)) { $0 + $1.value }
+      let outOfRange = values.contains { $0.value < 0 || $0.value > 1 }
+      if !values.isEmpty, outOfRange || abs(sum - 1) > 0.01 {
+        let maxVal = values.map { $0.value }.max() ?? 0
+        var expSum: Float = 0
+        let exps: [(label: String, value: Float)] = values.map { entry in
+          let e = exp(entry.value - maxVal)
+          expSum += e
+          return (label: entry.label, value: e)
+        }
+        if expSum > 0 {
+          values = exps.map { ($0.label, $0.value / expSum) }
+        }
+      }
+
+      if let entry = values.first(where: { $0.label == label }) {
+        confidence = entry.value
       }
     }
 
