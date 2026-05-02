@@ -1546,6 +1546,7 @@ final class CatchChatViewModel: ObservableObject {
     "brown trout": "Brown Trout",
     "chinook salmon": "Chinook Salmon",
     "lingcod": "Lingcod",
+    "musky": "Musky",
     "sea run trout": "Sea-Run Trout",
     "steelhead": "Steelhead",
     "other": "Bi-catch",
