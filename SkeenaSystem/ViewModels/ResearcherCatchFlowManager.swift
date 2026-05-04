@@ -98,6 +98,22 @@ final class ResearcherCatchFlowManager: ObservableObject {
   @Published var lifecycleStage: String?
   @Published var sex: String?
   @Published var lengthInches: Double?
+  /// True when `lengthInches` came from the species-scaled heuristic and
+  /// clamped at the species' max — `formatLength` renders "<n>+ inches".
+  /// Reset to false whenever the user manually overrides the length.
+  @Published var lengthAtSpeciesCap: Bool = false
+  /// True when the initial length estimate was a range (e.g. "20-25 inches").
+  /// `lengthInches` is set to the midpoint for persistence, but the
+  /// confirm-length prompt surfaces the range so the user can either accept
+  /// the midpoint or type the actual measured length. Reset on user edit OR
+  /// on a re-estimate after species correction (which always produces a
+  /// single value, not a range).
+  @Published var lengthIsRangeEstimate: Bool = false
+  /// Cleaned display string for the original range (e.g. "14-17 inches").
+  /// Set alongside `lengthIsRangeEstimate=true` so `lengthPrompt` can show
+  /// the range, not just the stored midpoint. Cleared on user edit or
+  /// re-estimate (same lifecycle as `lengthIsRangeEstimate`).
+  @Published var lengthRangeDisplay: String?
   @Published var girthInches: Double?
   @Published var weightLbs: Double?
 
@@ -188,6 +204,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     lifecycleStage: String?,
     sex: String?,
     lengthInches: Double?,
+    lengthAtSpeciesCap: Bool = false,
+    lengthIsRangeEstimate: Bool = false,
+    lengthRangeDisplay: String? = nil,
     riverName: String?,
     gpsLocationText: String? = nil
   ) {
@@ -195,6 +214,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     self.lifecycleStage = lifecycleStage
     self.sex = sex
     self.lengthInches = lengthInches
+    self.lengthAtSpeciesCap = lengthAtSpeciesCap
+    self.lengthIsRangeEstimate = lengthIsRangeEstimate
+    self.lengthRangeDisplay = lengthRangeDisplay
     self.riverName = riverName
     self.gpsLocationText = gpsLocationText
     self.riverNameWasCorrected = false
@@ -236,7 +258,11 @@ final class ResearcherCatchFlowManager: ObservableObject {
       guard lengthInches != nil else {
         return lengthPrompt()
       }
-      // Length confirmed — recalculate girth/weight with confirmed length, show girth
+      // Tap-confirm accepts the midpoint of any range estimate. The user can
+      // override by typing — handled in researcherApplyEdit. Clear the flag
+      // and display so downstream steps don't keep treating the value as a range.
+      lengthIsRangeEstimate = false
+      lengthRangeDisplay = nil
       recalculate()
       currentStep = .confirmGirth
       return girthPrompt()
@@ -330,6 +356,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     case .confirmLength:
       if let num = extractNumber(from: text) {
         lengthInches = num
+        lengthAtSpeciesCap = false  // user-typed value is ground truth, not capped
+        lengthIsRangeEstimate = false  // explicit number — range no longer applies
+        lengthRangeDisplay = nil
         recalculate()
         // Auto-advance: entering a number counts as confirming length
         currentStep = .confirmGirth
@@ -612,6 +641,12 @@ final class ResearcherCatchFlowManager: ObservableObject {
     // one manually. Confirm has no meaning without a value to confirm.
     guard let length = lengthInches else {
       return "Length not detected from the photo.\n§\nPlease type a measured length in inches (e.g. \"32\") to continue."
+    }
+    // When the heuristic returned a range, surface the range itself so the
+    // user can see the uncertainty, and offer both paths: tap-confirm accepts
+    // the midpoint, or they can type the actual measured length.
+    if lengthIsRangeEstimate, let rangeText = lengthRangeDisplay {
+      return "Estimated length: \(rangeText)\n§\nConfirm to accept the midpoint (\(formatLength(length))), or type the actual measured length in inches (e.g. \"19\")."
     }
     return "Estimated length: \(formatLength(length))\n§\nConfirm, or type a new value (e.g. \"32\")."
   }
@@ -973,10 +1008,11 @@ final class ResearcherCatchFlowManager: ObservableObject {
   // MARK: - Formatting
 
   private func formatLength(_ inches: Double) -> String {
+    let suffix = lengthAtSpeciesCap ? "+" : ""
     if inches.rounded() == inches {
-      return "\(Int(inches)) inches"
+      return "\(Int(inches))\(suffix) inches"
     }
-    return String(format: "%.1f inches", inches)
+    return String(format: "%.1f%@ inches", inches, suffix)
   }
 
   private func formatGirth(_ inches: Double) -> String {

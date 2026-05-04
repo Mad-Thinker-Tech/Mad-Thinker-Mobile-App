@@ -181,17 +181,22 @@ final class CatchChatViewModelTests: XCTestCase {
   }
 
   // MARK: - averagedLength Tests
+  //
+  // averagedLength returns the *midpoint* of any range — used to produce the
+  // single Int that gets persisted to the backend as initialAnalysis.lengthInches.
+  // The user-facing chat preserves the range string verbatim; the midpoint
+  // never reaches the bubble.
 
-  func testAveragedLength_rangeWithHyphen_returnsHighEnd() {
-    XCTAssertEqual(vm.averagedLength(from: "32-36 inches"), "36 inches")
+  func testAveragedLength_rangeWithHyphen_returnsMidpoint() {
+    XCTAssertEqual(vm.averagedLength(from: "32-36 inches"), "34 inches")
   }
 
-  func testAveragedLength_rangeWithEnDash_returnsHighEnd() {
-    XCTAssertEqual(vm.averagedLength(from: "32–36 inches"), "36 inches")
+  func testAveragedLength_rangeWithEnDash_returnsMidpoint() {
+    XCTAssertEqual(vm.averagedLength(from: "32–36 inches"), "34 inches")
   }
 
-  func testAveragedLength_rangeWithEmDash_returnsHighEnd() {
-    XCTAssertEqual(vm.averagedLength(from: "32—36 inches"), "36 inches")
+  func testAveragedLength_rangeWithEmDash_returnsMidpoint() {
+    XCTAssertEqual(vm.averagedLength(from: "32—36 inches"), "34 inches")
   }
 
   func testAveragedLength_singleInteger_returnsWithInches() {
@@ -210,12 +215,13 @@ final class CatchChatViewModelTests: XCTestCase {
     XCTAssertEqual(vm.averagedLength(from: "-"), "-")
   }
 
-  func testAveragedLength_reversedRange_returnsMax() {
-    XCTAssertEqual(vm.averagedLength(from: "36-32 inches"), "36 inches")
+  func testAveragedLength_reversedRange_stillReturnsMidpoint() {
+    // Range bounds may arrive in either order; midpoint is order-independent.
+    XCTAssertEqual(vm.averagedLength(from: "36-32 inches"), "34 inches")
   }
 
-  func testAveragedLength_decimalRange_returnsHighEnd() {
-    XCTAssertEqual(vm.averagedLength(from: "30.5-33.5 inches"), "33.5 inches")
+  func testAveragedLength_decimalRange_returnsMidpoint() {
+    XCTAssertEqual(vm.averagedLength(from: "30.5-33.5 inches"), "32 inches")
   }
 
   // MARK: - extractLengthInches Tests
@@ -228,8 +234,8 @@ final class CatchChatViewModelTests: XCTestCase {
     XCTAssertEqual(vm.extractLengthInches(from: "32.5 inches"), 33)
   }
 
-  func testExtractLengthInches_rangeReturnsHighEnd() {
-    XCTAssertEqual(vm.extractLengthInches(from: "32-36 inches"), 36)
+  func testExtractLengthInches_rangeReturnsMidpoint() {
+    XCTAssertEqual(vm.extractLengthInches(from: "32-36 inches"), 34)
   }
 
   func testExtractLengthInches_empty_returnsNil() {

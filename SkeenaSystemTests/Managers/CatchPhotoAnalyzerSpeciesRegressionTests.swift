@@ -35,7 +35,7 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
                    "speciesLabels must stay in alphabetical order to match Python ImageFolder training. Did you append a new species at the end instead of inserting it?")
   }
 
-  /// Locks the exact 9-class set — any addition or removal here is a deliberate
+  /// Locks the exact 11-class set — any addition or removal here is a deliberate
   /// model retrain and must update this assertion in lockstep.
   func testSpeciesLabels_exactSet() {
     XCTAssertEqual(
@@ -46,7 +46,9 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
         "brown_trout",
         "chinook_salmon",
         "lingcod",
+        "musky",
         "other",
+        "rainbow_trout",
         "sea_run_trout",
         "steelhead_holding",
         "steelhead_traveler"
@@ -77,21 +79,27 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
   /// to calibrate the regressor for that class yet.
   func testRegressorBypassSpecies_includesAllUncalibratedClasses() {
     let bypass = CatchPhotoAnalyzer.regressorBypassSpecies
-    XCTAssertTrue(bypass.contains("atlantic_salmon_holding"))
-    XCTAssertTrue(bypass.contains("atlantic_salmon_traveler"))
     XCTAssertTrue(bypass.contains("brown_trout"))
-    XCTAssertTrue(bypass.contains("chinook_salmon"))
     XCTAssertTrue(bypass.contains("lingcod"))
-    XCTAssertTrue(bypass.contains("sea_run_trout"))
+    XCTAssertTrue(bypass.contains("musky"))
     XCTAssertTrue(bypass.contains("other"))
+    XCTAssertTrue(bypass.contains("rainbow_trout"))
+    XCTAssertTrue(bypass.contains("sea_run_trout"))
   }
 
-  /// Steelhead is the calibrated class — both lifecycle stages must run
-  /// through the regressor.
-  func testRegressorBypassSpecies_excludesSteelheadStages() {
-    XCTAssertFalse(CatchPhotoAnalyzer.regressorBypassSpecies.contains("steelhead_holding"),
-                   "Steelhead is the regressor's calibrated class — bypass would skip the model")
-    XCTAssertFalse(CatchPhotoAnalyzer.regressorBypassSpecies.contains("steelhead_traveler"))
+  /// Species using the regressor — atlantic salmon, chinook, and steelhead.
+  /// Removing any of these from the regressor flow without retraining will
+  /// silently produce wrong-distribution length predictions.
+  func testRegressorBypassSpecies_excludesRegressorCalibratedClasses() {
+    let bypass = CatchPhotoAnalyzer.regressorBypassSpecies
+    XCTAssertFalse(bypass.contains("steelhead_holding"),
+                   "Steelhead is the regressor's primary calibrated class — bypass would skip the model")
+    XCTAssertFalse(bypass.contains("steelhead_traveler"))
+    XCTAssertFalse(bypass.contains("atlantic_salmon_holding"),
+                   "Atlantic salmon was promoted to the regressor flow — re-adding to bypass needs explicit reasoning")
+    XCTAssertFalse(bypass.contains("atlantic_salmon_traveler"))
+    XCTAssertFalse(bypass.contains("chinook_salmon"),
+                   "Chinook was promoted to the regressor flow — re-adding to bypass needs explicit reasoning")
   }
 
   /// Every member of `regressorBypassSpecies` must be a valid `speciesLabels`
@@ -144,4 +152,59 @@ final class CatchPhotoAnalyzerSpeciesRegressionTests: XCTestCase {
   // and the chat parser bypasses species-name lookup on lowercased
   // "unable to") is verified in CatchChatViewModelTests so the parser side
   // can use the setUp-managed view model. Don't duplicate it here.
+
+  // MARK: - speciesDisplayToLabel lockstep
+  //
+  // Used by `reEstimateLength` to map the user's corrected species name back
+  // to a model label. Drift here silently lands the regressor on speciesIdx=0
+  // with a wrong-distribution prediction (the bug that produced the
+  // "rainbow trout" → "rainbow_holding" miss before the fix). Two invariants:
+  //   1. Every value must exist in `speciesLabels` (target label is real).
+  //   2. Every key in `speciesDisplayNames` (the chat surfaces it) must appear
+  //      as a key here (otherwise the user can correct to a species we can't
+  //      round-trip).
+
+  func testSpeciesDisplayToLabel_allValuesAreValidSpeciesLabels() {
+    let validLabels = Set(CatchPhotoAnalyzer.speciesLabels)
+    for (key, value) in CatchPhotoAnalyzer.speciesDisplayToLabel {
+      XCTAssertTrue(validLabels.contains(value),
+                    "speciesDisplayToLabel[\"\(key)\"] = \"\(value)\" is not in speciesLabels — typo or stale entry. The reEstimateLength path will silently fall through to speciesIdx=0.")
+    }
+  }
+
+  func testSpeciesDisplayToLabel_coversAllChatDisplayNames() {
+    // The reEstimateLength lookup key is `correctedSpecies.lowercased()` —
+    // i.e. the user-facing display name (the *value* in speciesDisplayNames),
+    // not its model-label-root key. e.g. "other" → "Bi-catch" → lookup
+    // "bi-catch". Walk the values, lowercase, and confirm coverage.
+    let displayMap = CatchPhotoAnalyzer.speciesDisplayToLabel
+    for displayValue in CatchChatViewModel.speciesDisplayNames.values {
+      let lookupKey = displayValue.lowercased()
+      XCTAssertNotNil(displayMap[lookupKey],
+                      "speciesDisplayToLabel is missing key '\(lookupKey)' (chat displays as '\(displayValue)') — when the user confirms this species, reEstimateLength can't resolve it. Add the entry pointing at the correct model label.")
+    }
+  }
+
+  // MARK: - speciesLengthRanges lockstep
+  //
+  // Used by the heuristic to map the raw pixel-length estimate into a species-
+  // appropriate inches range. Missing entries silently inherit the generic
+  // 10-47" steelhead-shaped envelope, which is wrong for everything that
+  // isn't steelhead. Per the playbook, every onboarded species should have
+  // an entry — but at minimum, every entry's KEY must be a real species label.
+
+  func testSpeciesLengthRanges_allKeysAreValidSpeciesLabels() {
+    let validLabels = Set(CatchPhotoAnalyzer.speciesLabels)
+    for key in CatchPhotoAnalyzer.speciesLengthRanges.keys {
+      XCTAssertTrue(validLabels.contains(key),
+                    "speciesLengthRanges contains key '\(key)' which is not in speciesLabels — typo or stale entry")
+    }
+  }
+
+  func testSpeciesLengthRanges_minLessThanMax() {
+    for (key, range) in CatchPhotoAnalyzer.speciesLengthRanges {
+      XCTAssertLessThan(range.min, range.max,
+                        "speciesLengthRanges[\"\(key)\"] has min \(range.min) >= max \(range.max) — would produce zero/negative range in heuristic mapping")
+    }
+  }
 }

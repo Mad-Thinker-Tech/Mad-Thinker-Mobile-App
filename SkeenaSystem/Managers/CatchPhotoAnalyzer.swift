@@ -36,6 +36,10 @@ struct CatchPhotoAnalysis {
   let lifecycleStage: String?
   let featureVector: CatchPhotoAnalyzer.LengthFeatureVector?
   let lengthSource: LengthEstimateSource?
+  /// True when the heuristic clamped at the species' max length range —
+  /// i.e. raw input exceeded the global heuristic envelope ceiling.
+  /// Carried through to the chat flow so `formatLength` can render "+".
+  let lengthAtSpeciesCap: Bool
   let modelVersion: String?
   /// Alternative species candidates when the ML top-1 confidence is ambiguous.
   /// Empty when the model was confident enough to commit directly.
@@ -61,6 +65,7 @@ struct CatchPhotoAnalysis {
     lifecycleStage: String? = nil,
     featureVector: CatchPhotoAnalyzer.LengthFeatureVector? = nil,
     lengthSource: LengthEstimateSource? = nil,
+    lengthAtSpeciesCap: Bool = false,
     modelVersion: String? = nil,
     speciesAlternatives: [SpeciesCandidate] = [],
     speciesConfidence: Float? = nil,
@@ -74,6 +79,7 @@ struct CatchPhotoAnalysis {
     self.lifecycleStage = lifecycleStage
     self.featureVector = featureVector
     self.lengthSource = lengthSource
+    self.lengthAtSpeciesCap = lengthAtSpeciesCap
     self.modelVersion = modelVersion
     self.speciesAlternatives = speciesAlternatives
     self.speciesConfidence = speciesConfidence
@@ -123,10 +129,7 @@ final class CatchPhotoAnalyzer {
   static let regressorBypassSpecies: Set<String> = [
       "sea_run_trout",
       "other",
-      "atlantic_salmon_holding",
-      "atlantic_salmon_traveler",
       "brown_trout",
-      "chinook_salmon",
       "lingcod",
       "musky",
       "rainbow_trout"
@@ -272,11 +275,25 @@ final class CatchPhotoAnalyzer {
     var lengthText: String? = "Length estimate not available (photo estimate failed)"
     var featureVector: LengthFeatureVector?
     var lengthSource: LengthEstimateSource?
+    var lengthAtSpeciesCap: Bool = false
 
     if let fishBox = detection.fishBox {
-      if let personBox = detection.personBox {
-        AppLogging.log({ "Detector found person box with conf \(personBox.confidence)" }, level: .info, category: .ml)
-      }
+      // Gate the person box on confidence — low-confidence person detections
+      // (square boxes, partial-body false positives) silently corrupt the
+      // fish/person ratios used by both the heuristic and the regressor's
+      // feature vector. Below the threshold we treat the person as undetected.
+      let personConfThreshold = AppEnvironment.shared.personDetectMinConfidence
+      let qualifiedPersonBox: NormalizedBox? = {
+        guard let p = detection.personBox else { return nil }
+        if p.confidence >= personConfThreshold {
+          AppLogging.log({ "Detector found person box with conf \(p.confidence)" }, level: .info, category: .ml)
+          return p
+        }
+        AppLogging.log({
+          "Person box rejected: conf \(String(format: "%.2f", p.confidence)) < threshold \(String(format: "%.2f", personConfThreshold)) — treating as no person reference"
+        }, level: .info, category: .ml)
+        return nil
+      }()
 
       // Build feature vector from all detection results
       let speciesIdx = vitResult?.index ?? 0
@@ -284,7 +301,7 @@ final class CatchPhotoAnalyzer {
 
       let fv = buildFeatureVector(
         fishBox: fishBox,
-        personBox: detection.personBox,
+        personBox: qualifiedPersonBox,
         speciesIndex: speciesIdx,
         speciesConfidence: speciesConf,
         hand: handMeasurement,
@@ -364,12 +381,14 @@ final class CatchPhotoAnalyzer {
           let scaledResult = estimateLength(from: fishBox, imageSize: image.size, speciesLabel: detectedSpeciesLabel)
           lengthText = scaledResult.display
           lengthSource = .heuristic
+          lengthAtSpeciesCap = scaledResult.atSpeciesCap
           AppLogging.log({ "Using species-scaled heuristic for \(detectedSpeciesLabel ?? "unknown") (regressor not yet calibrated)" }, level: .info, category: .ml)
         }
       } else {
         let result = estimateLength(from: fishBox, imageSize: image.size)
         lengthText = result.display
         lengthSource = .heuristic
+        lengthAtSpeciesCap = result.atSpeciesCap
         AppLogging.log({ "Length heuristic fallback: \(result.display) (regressor \(AppEnvironment.shared.useLengthRegressor ? "failed" : "disabled"))" }, level: .debug, category: .ml)
       }
     } else {
@@ -383,6 +402,7 @@ final class CatchPhotoAnalyzer {
       estimatedLength: lengthText,
       featureVector: featureVector,
       lengthSource: lengthSource,
+      lengthAtSpeciesCap: lengthAtSpeciesCap,
       modelVersion: CatchPhotoAnalyzer._lengthRegressorVersion,
       speciesAlternatives: speciesAlternatives,
       speciesConfidence: speciesRootConfidence,
@@ -1451,33 +1471,54 @@ final class CatchPhotoAnalyzer {
 
   /// Known length ranges per species for heuristic rescaling.
   /// Add new species here as they are calibrated.
-  private static let speciesLengthRanges: [String: (min: Double, max: Double)] = [
+  static let speciesLengthRanges: [String: (min: Double, max: Double)] = [
+    "brown_trout":         (min: 8,  max: 30),
+    "lingcod":             (min: 18, max: 60),
+    "musky":               (min: 24, max: 60),
+    "rainbow_trout":       (min: 8,  max: 30),
+    "sea_run_trout":       (min: 8,  max: 30),
     "steelhead_holding":   (min: 24, max: 42),
     "steelhead_traveler":  (min: 24, max: 42),
-    "sea_run_trout":       (min: 8,  max: 20),
   ]
 
   /// Turn the best detected box into a rough length estimate.
   /// When `speciesLabel` is provided and the species has a known range,
-  /// the raw heuristic output is rescaled into that range.
+  /// the raw heuristic output is rescaled into that range. `atSpeciesCap`
+  /// is true when the raw input exceeded the global heuristic envelope and
+  /// the value clamped to the species' max — surfaced as "+" in the display.
   private func estimateLength(
     from box: NormalizedBox,
     imageSize: CGSize,
     speciesLabel: String? = nil
-  ) -> (inches: Double, display: String) {
+  ) -> (inches: Double, display: String, atSpeciesCap: Bool) {
     // YOLOv8 export is giving us pixel coordinates in 640×640 space.
     // Use the *long side* of the box as a proxy for fish length.
     var pixelLength = max(box.width, box.height)
 
-    // Scale down boxes (training data has boxes around person+fish, not just fish)
+    // Diagonal-fraction correction: a tight close-up (high diagFrac) means the
+    // photographer was close, so the pixel-length over-represents the fish's
+    // real size; a wide shot (low diagFrac) means the opposite. Compute in the
+    // YOLO 640×640 space so it matches buildFeatureVector's diagonalFraction.
+    // Strength 0 disables the correction (env-tunable).
     let env = AppEnvironment.shared
+    let frameDiagonal: CGFloat = sqrt(640 * 640 + 640 * 640)
+    let fishDiagonal = sqrt(box.width * box.width + box.height * box.height)
+    let diagFrac = fishDiagonal / frameDiagonal
+    let strength = CGFloat(env.heuristicDiagFracStrength)
+    let diagAdjustment = 1.0 + strength * (0.5 - diagFrac)
+    pixelLength *= diagAdjustment
+
+    // Scale down boxes (training data has boxes around person+fish, not just fish)
     pixelLength *= env.fishBoxScaleFactor
 
     // Heuristic: pixels per inch in the 640×640 model space
     let pixelsPerInch: CGFloat = env.fishPixelsPerInch
     let rawInches = Double(pixelLength / pixelsPerInch)
 
-    AppLogging.log({ "estimateLength: w=\(box.width), h=\(box.height), pixelLength=\(pixelLength), rawInches=\(rawInches)" }, level: .debug, category: .ml)
+    AppLogging.log({
+      "estimateLength: w=\(box.width), h=\(box.height), diagFrac=\(String(format: "%.3f", diagFrac)), " +
+      "diagAdj=\(String(format: "%.3f", diagAdjustment)), pixelLength=\(pixelLength), rawInches=\(rawInches)"
+    }, level: .debug, category: .ml)
 
     // If species has a known range, rescale the raw heuristic into that range
     if let species = speciesLabel,
@@ -1488,27 +1529,33 @@ final class CatchPhotoAnalyzer {
       let heuristicMax = env.fishMaxLengthInches
 
       // Normalize raw inches to 0..1 within the steelhead heuristic range
-      let fraction = min(1.0, max(0.0,
-        (rawInches - heuristicMin) / (heuristicMax - heuristicMin)
-      ))
+      let unclamped = (rawInches - heuristicMin) / (heuristicMax - heuristicMin)
+      let fraction = min(1.0, max(0.0, unclamped))
 
       // Map into the species-specific range
       let scaled = range.min + fraction * (range.max - range.min)
-      let low = (scaled * env.fishEstimateLowFactor).rounded()
-      let high = (scaled * env.fishEstimateHighFactor).rounded()
+      let atCap = unclamped >= 1.0
 
       AppLogging.log({
         "estimateLength (species-scaled): raw=\(String(format: "%.1f", rawInches))\" " +
         "-> fraction=\(String(format: "%.2f", fraction)) " +
         "-> \(species) range [\(Int(range.min))-\(Int(range.max))] " +
-        "-> scaled=\(String(format: "%.1f", scaled))\""
+        "-> scaled=\(String(format: "%.1f", scaled))\"" +
+        (atCap ? " [AT SPECIES CAP]" : "")
       }, level: .debug, category: .ml)
 
-      let display = String(
-        format: "%.0f–%.0f inches (photo estimate)",
-        low, high
-      )
-      return (inches: scaled, display: display)
+      // At-cap fish exceed the model's representable upper bound — surface
+      // as "<max>+ inches" rather than a misleading low–high range that would
+      // imply both sides are bounded.
+      let display: String
+      if atCap {
+        display = String(format: "%.0f+ inches (photo estimate)", range.max)
+      } else {
+        let low = (scaled * env.fishEstimateLowFactor).rounded()
+        let high = (scaled * env.fishEstimateHighFactor).rounded()
+        display = String(format: "%.0f–%.0f inches (photo estimate)", low, high)
+      }
+      return (inches: scaled, display: display, atSpeciesCap: atCap)
     }
 
     // Default: clamp to steelhead range (original behavior)
@@ -1523,7 +1570,7 @@ final class CatchPhotoAnalyzer {
       high.rounded()
     )
 
-    return (inches: clamped, display: display)
+    return (inches: clamped, display: display, atSpeciesCap: false)
   }
 
   // MARK: - Species-corrected length re-estimation
@@ -1532,19 +1579,35 @@ final class CatchPhotoAnalyzer {
   struct LengthReEstimate {
     let lengthInches: Double?
     let source: LengthEstimateSource
+    /// True when the species-scaled heuristic clamped at the species' max
+    /// length range (raw input was >= the global heuristic envelope ceiling).
+    /// Surfaced as a "+" suffix in the formatted length to signal that the
+    /// fish may exceed the model's representable upper bound.
+    let atSpeciesCap: Bool
   }
 
   /// Maps user-facing species names (+ optional lifecycle stage) to model labels.
   /// Used when re-estimating length after the researcher corrects species.
-  private static let speciesDisplayToLabel: [String: String] = [
+  ///
+  /// Every value MUST exist in `speciesLabels`. Keys MUST cover every entry in
+  /// `CatchChatViewModel.speciesDisplayNames` — otherwise a corrected species
+  /// silently falls through to `speciesIdx=0` and the regressor runs with the
+  /// wrong species feature. Keep all three (`speciesLabels`,
+  /// `speciesDisplayNames`, this map) in lockstep — see `/new-species`.
+  static let speciesDisplayToLabel: [String: String] = [
+    // Lifecycle-split species — default to _holding; reEstimateLength will
+    // upgrade to _traveler when the stage parameter is supplied.
     "steelhead":       "steelhead_holding",
     "atlantic salmon": "atlantic_salmon_holding",
+    // Single-label species
+    "rainbow trout":   "rainbow_trout",
+    "brown trout":     "brown_trout",
+    "chinook salmon":  "chinook_salmon",
     "sea-run trout":   "sea_run_trout",
     "sea run trout":   "sea_run_trout",
-    "rainbow trout":   "rainbow_holding",
-    "brook trout":     "brook_holding",
-    "arctic char":     "articchar_holding",
-    "grayling":        "grayling",
+    "lingcod":         "lingcod",
+    "musky":           "musky",
+    "bi-catch":        "other",
   ]
 
   /// Maps model labels to their species index in the `speciesLabels` array.
@@ -1568,7 +1631,7 @@ final class CatchPhotoAnalyzer {
     correctedLifecycleStage: String?
   ) -> LengthReEstimate {
     guard let species = correctedSpecies else {
-      return LengthReEstimate(lengthInches: nil, source: .heuristic)
+      return LengthReEstimate(lengthInches: nil, source: .heuristic, atSpeciesCap: false)
     }
 
     // Build the model label from species + lifecycle stage
@@ -1588,11 +1651,20 @@ final class CatchPhotoAnalyzer {
 
     // Resolve species index
     let speciesIdx: Int
+    let labelResolved: Bool
     if let label = modelLabel, let idx = speciesLabelToIndex(label) {
       speciesIdx = idx
+      labelResolved = true
     } else {
-      // Unknown species — use index 0 as fallback
+      // Couldn't map the corrected species to a known model label.
+      // Force-skip the regressor — running it with speciesIdx=0 silently
+      // produces a wrong-distribution prediction. Heuristic falls through
+      // to the default clamp when resolvedLabel isn't in speciesLengthRanges.
       speciesIdx = 0
+      labelResolved = false
+      AppLogging.log({
+        "reEstimateLength: could not resolve '\(species)' to a known model label — using heuristic"
+      }, level: .warn, category: .ml)
     }
 
     let resolvedLabel = modelLabel ?? "unknown"
@@ -1601,7 +1673,7 @@ final class CatchPhotoAnalyzer {
       "resolved label=\(resolvedLabel), index=\(speciesIdx)"
     }, level: .info, category: .ml)
 
-    let useRegressor = !Self.regressorBypassSpecies.contains(resolvedLabel)
+    let useRegressor = labelResolved && !Self.regressorBypassSpecies.contains(resolvedLabel)
 
     // Build updated feature vector with corrected species index
     var updatedFV = originalFV
@@ -1617,16 +1689,24 @@ final class CatchPhotoAnalyzer {
         "reEstimateLength: regressor predicted=\(String(format: "%.1f", predicted)), " +
         "clamped=\(String(format: "%.1f", clamped)) for \(resolvedLabel)"
       }, level: .info, category: .ml)
-      return LengthReEstimate(lengthInches: clamped, source: .regressor)
+      return LengthReEstimate(lengthInches: clamped, source: .regressor, atSpeciesCap: false)
     }
 
     // Fallback to species-scaled heuristic
     // Reconstruct fish box dimensions from feature vector (in 640x640 model space)
     let fw = originalFV.fishBoxWidth
     let fh = originalFV.fishBoxHeight
-    let pixelLength = max(fw, fh)
+    var pixelLength = max(fw, fh)
 
     let env = AppEnvironment.shared
+
+    // Apply the same diagFrac correction the initial heuristic uses, so post-
+    // correction estimates don't diverge from the initial estimate for the
+    // same photo. diagonalFraction was computed in buildFeatureVector.
+    let strength = Double(env.heuristicDiagFracStrength)
+    let diagAdjustment = 1.0 + strength * (0.5 - originalFV.diagonalFraction)
+    pixelLength *= diagAdjustment
+
     let scaledPixelLength = pixelLength * env.fishBoxScaleFactor
     let rawInches = scaledPixelLength / env.fishPixelsPerInch
 
@@ -1634,16 +1714,17 @@ final class CatchPhotoAnalyzer {
     if let range = Self.speciesLengthRanges[resolvedLabel] {
       let heuristicMin = env.fishMinLengthInches
       let heuristicMax = env.fishMaxLengthInches
-      let fraction = min(1.0, max(0.0,
-        (rawInches - heuristicMin) / (heuristicMax - heuristicMin)
-      ))
+      let unclamped = (rawInches - heuristicMin) / (heuristicMax - heuristicMin)
+      let fraction = min(1.0, max(0.0, unclamped))
       let scaled = range.min + fraction * (range.max - range.min)
+      let atCap = unclamped >= 1.0
 
       AppLogging.log({
         "reEstimateLength: heuristic species-scaled for \(resolvedLabel), " +
-        "raw=\(String(format: "%.1f", rawInches)), scaled=\(String(format: "%.1f", scaled))"
+        "raw=\(String(format: "%.1f", rawInches)), scaled=\(String(format: "%.1f", scaled))" +
+        (atCap ? " [AT SPECIES CAP]" : "")
       }, level: .info, category: .ml)
-      return LengthReEstimate(lengthInches: scaled, source: .heuristic)
+      return LengthReEstimate(lengthInches: scaled, source: .heuristic, atSpeciesCap: atCap)
     }
 
     // Default heuristic (steelhead range)
@@ -1652,7 +1733,7 @@ final class CatchPhotoAnalyzer {
       "reEstimateLength: heuristic default, raw=\(String(format: "%.1f", rawInches)), " +
       "clamped=\(String(format: "%.1f", clamped))"
     }, level: .info, category: .ml)
-    return LengthReEstimate(lengthInches: clamped, source: .heuristic)
+    return LengthReEstimate(lengthInches: clamped, source: .heuristic, atSpeciesCap: false)
   }
 }
 

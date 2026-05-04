@@ -32,27 +32,35 @@ cp     ~/dev/MadThinkerML/models/LengthRegressor.mlmodel  SkeenaSystem/Models/
 
 Insert the new label in its alphabetical position. If the label uses the `<species>_<lifecycle>` pattern, confirm the lifecycle suffix is `holding` or `traveler` — `splitSpecies()` only recognizes those two. Any other suffix needs a parser update.
 
-## Step 3 — `regressorBypassSpecies` (same file, **two occurrences**)
+## Step 3 — `regressorBypassSpecies` (same file, single `static let`)
 
-Use `replace_all` on the `Edit`. Add the new species to the bypass set — the LengthRegressor has no calibrated length data for it until real catches with measured lengths exist. Heuristic fallback applies until then.
+Add the new species to the bypass set. The LengthRegressor has no calibrated length data for it until real catches with measured lengths exist. Heuristic fallback applies until then.
 
 ## Step 4 — `speciesDisplayNames` in [`SkeenaSystem/ViewModels/CatchChatViewModel.swift`](../../SkeenaSystem/ViewModels/CatchChatViewModel.swift)
 
 Key is the lowercased, **underscore-stripped** species prefix (no lifecycle stage). Value is the user-facing display name. Example: `"coho salmon": "Coho Salmon"`.
 
-## Step 5 — `speciesLengthRanges` (usually leave alone)
+## Step 5 — `speciesDisplayToLabel` in `CatchPhotoAnalyzer.swift`
 
-Do **not** add the new species to `speciesLengthRanges` unless you have calibrated length data. Both lookup sites use `if let` — missing keys fall back to the default heuristic clamp, which is correct.
+Used by `reEstimateLength` to round-trip the user's corrected species back to a model label. Key matches the `speciesDisplayNames` key form (lowercased, underscore-stripped); value MUST exist in `speciesLabels`. Skipping this is the bug that made `"rainbow trout"` map to a nonexistent `"rainbow_holding"` and silently land the regressor on `speciesIdx=0`.
 
-## Step 6 — Preprocessing sanity check (should already be correct)
+For a lifecycle-split species, default the value to the `_holding` variant — `reEstimateLength` upgrades to `_traveler` if the stage is supplied. For a single-label species (rainbow, brown, chinook, etc.) map directly to that label.
+
+## Step 6 — `speciesLengthRanges` — always provide a heuristic range
+
+Same file as Step 2. Add the new species with a plausible biological range (FishBase, agency size records, typical caught range). These are heuristic placeholders, NOT measured-data fits — tighten them later as real catch data accumulates.
+
+Without an entry, the species inherits the generic 10–47" steelhead-shaped envelope, which produces nonsense for anything smaller or larger. Round ranges to clean 2" or 5" increments. If the new species is lifecycle-split, give holding and traveler the same range unless there's evidence to differentiate.
+
+## Step 7 — Preprocessing sanity check (should already be correct)
 
 Verify `runViT` in `CatchPhotoAnalyzer.swift` passes `mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5]` (Inception-style, timm default for `vit_tiny_patch16_224`). If it's defaulting to ImageNet norms, the species model will silently misfire. This was fixed in commit `ad51607` — shouldn't regress, but worth a glance.
 
-## Step 7 — Bi-catch UX preservation
+## Step 8 — Bi-catch UX preservation
 
 The `other` class has custom UX: display name is `"Bi-catch"`, sex is suppressed to `"-"`, and the researcher flow has a tail-message branching (`identificationPrompt()` in `ResearcherCatchFlowManager.swift`) that asks the user to name the species when species is currently Bi-catch, or to optionally provide sex after they correct it. Don't break this when adding new classes.
 
-## Step 8 — Build + sim verification
+## Step 9 — Build + sim verification
 
 Run `/build` (or `xcodebuild` per `CLAUDE.md`). Then on the sim:
 
@@ -64,16 +72,21 @@ Run `/build` (or `xcodebuild` per `CLAUDE.md`). Then on the sim:
 
 Confirm the regressor bypass engaged by grepping Console for `Using species-scaled heuristic for <species> (regressor not yet calibrated)`.
 
-## Step 9 — Sync check + commit
+## Step 10 — Sync check + commit
 
-Read both `speciesLabels` and `speciesDisplayNames` and verify:
+Read all five species lists and verify alignment:
 
-- Every `speciesLabels` entry has a corresponding key in `speciesDisplayNames` (or explicitly bypasses via lifecycle-stripping).
-- No stale `speciesDisplayNames` keys that no longer exist in `speciesLabels`.
+- **`speciesLabels`** (source of truth) — every entry has a corresponding key in `speciesDisplayNames` (after lifecycle-stripping) AND a corresponding value in `speciesDisplayToLabel`.
+- **`regressorBypassSpecies`** — every entry exists in `speciesLabels`.
+- **`speciesDisplayToLabel`** — every value exists in `speciesLabels`; every key matches a key in `speciesDisplayNames`. This is the one that historically rotted (`"rainbow trout"` → nonexistent `"rainbow_holding"`).
+- **`speciesLengthRanges`** — new species has an entry; every key exists in `speciesLabels`.
+- **`speciesDisplayNames`** — every key is the lifecycle-stripped form of at least one `speciesLabels` entry; no stale keys.
+
+Drift in any of these silently produces wrong regressor inputs, wrong heuristic length ranges, or wrong UI display.
 
 Then stage, commit, push the feature branch. Hold off on merging to main until the user confirms sim verification.
 
-## Step 10 — Summarize
+## Step 11 — Summarize
 
 Give the user a one-paragraph summary including:
 

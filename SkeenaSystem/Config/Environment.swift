@@ -54,6 +54,8 @@ public final class AppEnvironment {
     public var overrideDefaultMapLongitude: Double?
     public var overrideImageCompressionQuality: Double?
     public var overrideFishDetectMinConfidence: Double?
+    public var overridePersonDetectMinConfidence: Double?
+    public var overrideHeuristicDiagFracStrength: Double?
     public var overrideFishBoxScaleFactor: Double?
     public var overrideFishPixelsPerInch: Double?
     public var overrideFishMinLengthInches: Double?
@@ -439,6 +441,26 @@ public final class AppEnvironment {
         if let v = overrideFishDetectMinConfidence { return Float(v) }
         if let s = stringFromInfo("FISH_DETECT_MIN_CONFIDENCE"), let v = Float(s) { return v }
         return 0.08
+    }
+
+    /// Minimum confidence threshold for the person detection box to be used as
+    /// a length-scale reference. Below this, the analyzer ignores the person
+    /// box (treats it as nil) — bad person boxes mislead fish/person ratios
+    /// in both the heuristic and the regressor's feature vector.
+    public var personDetectMinConfidence: Float {
+        if let v = overridePersonDetectMinConfidence { return Float(v) }
+        if let s = stringFromInfo("PERSON_DETECT_MIN_CONFIDENCE"), let v = Float(s) { return v }
+        return 0.40
+    }
+
+    /// Strength of the diagonal-fraction correction in the heuristic length
+    /// estimator. Adjusts raw pixel-length by `(1 + strength × (0.5 - diagFrac))`:
+    /// tight close-ups (high diagFrac) bias the estimate down, wide shots bias
+    /// it up. Set 0 to disable. Reasonable range 0.3–0.8.
+    public var heuristicDiagFracStrength: Float {
+        if let v = overrideHeuristicDiagFracStrength { return Float(v) }
+        if let s = stringFromInfo("HEURISTIC_DIAG_FRAC_STRENGTH"), let v = Float(s) { return v }
+        return 0.6
     }
 
     /// Scale factor applied to bounding box length (compensates for oversized training boxes).

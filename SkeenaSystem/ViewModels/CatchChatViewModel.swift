@@ -550,11 +550,28 @@ final class CatchChatViewModel: ObservableObject {
       ? nil
       : (prettySexValue.isEmpty ? nil : prettySexValue)
 
+    // The initial estimate is a range whenever the heuristic was used and
+    // the value didn't clamp to the species cap. Regressor outputs and
+    // at-cap heuristic outputs are single-valued, so they don't trigger the
+    // range-display path at the confirm-length step.
+    let isRangeEstimate = (analysis.lengthSource == .heuristic) && !analysis.lengthAtSpeciesCap
+    // Clean the original analyzer string ("14-17 inches (photo estimate)" →
+    // "14-17 inches") so the prompt can show the range verbatim. Only set
+    // when it's actually a range — otherwise nil.
+    let rangeDisplay: String? = {
+      guard isRangeEstimate else { return nil }
+      let cleaned = cleanedField(analysis.estimatedLength ?? "")
+      return cleaned.isEmpty ? nil : cleaned
+    }()
+
     flow.initialize(
       species: speciesName.isEmpty || speciesName == "-" ? nil : speciesName,
       lifecycleStage: stage,
       sex: sexForFlow,
       lengthInches: lengthValue,
+      lengthAtSpeciesCap: analysis.lengthAtSpeciesCap,
+      lengthIsRangeEstimate: isRangeEstimate,
+      lengthRangeDisplay: rangeDisplay,
       riverName: hasRealRiver ? cleanedRiverForFlow : nil,
       gpsLocationText: gpsFallback
     )
@@ -773,7 +790,7 @@ final class CatchChatViewModel: ObservableObject {
     guard let flow = researcherFlow else { return }
     identificationSubStep = .confirmSummary
 
-    var lines: [String] = ["Here's what I've got:"]
+    var lines: [String] = ["Perfect, specimen attributes are:"]
     if let river = flow.riverName, !river.isEmpty {
       lines.append("• Location: \(river)")
     } else {
@@ -1431,9 +1448,15 @@ final class CatchChatViewModel: ObservableObject {
       let oldLength = flow.lengthInches
       flow.lengthInches = newLength
       flow.lengthSource = result.source
+      flow.lengthAtSpeciesCap = result.atSpeciesCap
+      // Re-estimation always returns a single value, never a range — so
+      // the range-display path at confirmLength no longer applies.
+      flow.lengthIsRangeEstimate = false
+      flow.lengthRangeDisplay = nil
       AppLogging.log({
         "Species corrected: re-estimated length from \(oldLength.map { String(format: "%.1f", $0) } ?? "nil") " +
-        "to \(String(format: "%.1f", newLength)) inches (source: \(result.source.rawValue))"
+        "to \(String(format: "%.1f", newLength)) inches (source: \(result.source.rawValue))" +
+        (result.atSpeciesCap ? " [AT SPECIES CAP]" : "")
       }, level: .info, category: .ml)
     }
   }
@@ -1603,6 +1626,12 @@ final class CatchChatViewModel: ObservableObject {
     return (species, nil)
   }
 
+  /// Collapse a length string like "20-25 inches" to its midpoint ("23 inches").
+  /// Used by `extractLengthInches` to produce the single-value Int that gets
+  /// persisted (final + initialAnalysis) and by anywhere else that needs a
+  /// scalar form. The user-facing chat preserves the range — see
+  /// `formattedSummary` — so this midpoint never reaches the bubble; only
+  /// the database row.
   func averagedLength(from raw: String) -> String {
     var cleaned = raw
       .replacingOccurrences(of: "inches", with: "")
@@ -1623,11 +1652,11 @@ final class CatchChatViewModel: ObservableObject {
         if parts.count == 2,
            let a = Double(parts[0]),
            let b = Double(parts[1]) {
-          let high = max(a, b)
-          if high.rounded() == high {
-            return "\(Int(high)) inches"
+          let mid = (a + b) / 2.0
+          if mid.rounded() == mid {
+            return "\(Int(mid)) inches"
           } else {
-            return String(format: "%.1f inches", high)
+            return String(format: "%.1f inches", mid)
           }
         }
       }
@@ -1688,11 +1717,12 @@ final class CatchChatViewModel: ObservableObject {
       let lower = cleanedLen.lowercased()
       if lower.contains("not available") {
         parts.append("Estimated length: Inconclusive, please manually enter in the chat below")
-      } else {
-        let avgLen = averagedLength(from: cleanedLen)
-        if !avgLen.isEmpty {
-          parts.append("Estimated length: \(avgLen)")
-        }
+      } else if !cleanedLen.isEmpty {
+        // Preserve the analyzer's display string verbatim — ranges like
+        // "20-25 inches" stay as ranges so the user can see the uncertainty.
+        // The midpoint is computed separately for backend persistence via
+        // `extractLengthInches`.
+        parts.append("Estimated length: \(cleanedLen)")
       }
     }
 

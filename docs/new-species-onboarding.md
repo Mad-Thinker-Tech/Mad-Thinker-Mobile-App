@@ -62,7 +62,7 @@ If the label uses the `<species>_<lifecycle>` pattern (like `steelhead_holding`)
 
 ## Step 3 — Update `regressorBypassSpecies`
 
-Same file. There are **two occurrences** (one in `analyze()`, one in `reEstimateLength()`) — use `replace_all` on the edit.
+Same file. Single `static let` definition near `speciesLabels` (was previously inline at two call sites — kept consolidated since [commit history]). Edit just the one set literal.
 
 Bypass the new species from the CoreML length regressor until it has calibrated ground-truth length data. Until real catches with measured lengths exist for the new species, the regressor will extrapolate wildly.
 
@@ -73,7 +73,7 @@ let regressorBypassSpecies: Set<String> = ["sea_run_trout", "other", "atlantic_s
 let regressorBypassSpecies: Set<String> = ["sea_run_trout", "other", "atlantic_salmon", "coho_salmon"]
 ```
 
-Remove a species from this set in a future round **only** after you have enough real catches with measured lengths to fit a species-specific range in `speciesLengthRanges` (see Step 5).
+Remove a species from this set in a future round **only** after you have enough real catches with measured lengths to retrain the regressor against it. Heuristic placeholders in `speciesLengthRanges` (Step 6) are not enough — those just shape the heuristic fallback's display range.
 
 ## Step 4 — Update `speciesDisplayNames`
 
@@ -93,14 +93,57 @@ private static let speciesDisplayNames: [String: String] = [
 
 Missing keys fall back to `valueOnly.capitalized`, which produces `"Coho Salmon"` anyway. The explicit entry is still useful for stylization (hyphens, title case, etc.) and as a contract declaration.
 
-## Step 5 — `speciesLengthRanges` (usually leave alone)
+## Step 5 — Update `speciesDisplayToLabel`
 
-Same file as Step 2 (`CatchPhotoAnalyzer.swift`). This dict holds calibrated min/max length ranges per species for the heuristic fallback.
+File: [`SkeenaSystem/Managers/CatchPhotoAnalyzer.swift`](../SkeenaSystem/Managers/CatchPhotoAnalyzer.swift) — search for `private static let speciesDisplayToLabel`.
 
-- **Don't add** the new species here until you have calibrated length data. Both call sites use `if let range = Self.speciesLengthRanges[species]` — missing keys cleanly fall to the default steelhead-range clamp, which is what the bypass list ensures anyway.
-- Add an entry only when you have real catch data to fit it.
+This map is used by `reEstimateLength` when the user corrects the species in the chat. It maps the **lowercased display name** (the same key form used in `speciesDisplayNames`) back to a **model label** that exists in `speciesLabels`. Skipping this step silently lands the regressor on `speciesIdx=0` with the wrong species feature — no error, just a wrong number.
 
-## Step 6 — Build + simulator verification
+```swift
+private static let speciesDisplayToLabel: [String: String] = [
+    // Lifecycle-split species — default to _holding (reEstimateLength upgrades to _traveler when stage is supplied)
+    "steelhead":       "steelhead_holding",
+    "atlantic salmon": "atlantic_salmon_holding",
+    "coho salmon":     "coho_holding",         // NEW — if coho is lifecycle-split
+
+    // Single-label species
+    "rainbow trout":   "rainbow_trout",
+    // … etc.
+]
+```
+
+**Lockstep rules:**
+
+- Every value MUST exist in `speciesLabels`. If you map `"coho salmon"` → `"coho_holding"`, the matching `coho_holding` entry must be in `speciesLabels` (not just `coho_salmon`).
+- Every key in `speciesDisplayNames` (Step 4) MUST appear as a key here. Sync check at end of playbook (Step 10) catches drift.
+- Bi-catch is `"bi-catch"` → `"other"`.
+
+## Step 6 — `speciesLengthRanges` — provide a plausible biological range
+
+Same file as Step 2 (`CatchPhotoAnalyzer.swift`). This dict shapes the heuristic fallback: raw pixel-length is normalized within the global `[FISH_MIN_LENGTH_INCHES, FISH_MAX_LENGTH_INCHES]` envelope (currently 10–47") and then **linearly remapped into the species' (min, max)**. Without an entry, the species inherits the generic 10–47" envelope — which is shaped for steelhead and produces nonsense for anything smaller or larger.
+
+**Always add an entry when onboarding a new species.** A heuristic biological range is fine — these are explicitly placeholders, not regression fits.
+
+Suggested sources for the initial range:
+- FishBase species page (typical "common length" / "max length")
+- Regional state/provincial agency size records (e.g. WDFW, BC ENV)
+- The species' typical adult range encountered in fishing — not absolute world-record extremes
+
+Round to clean increments (5" or 2") and add a comment if the source is non-obvious. Tighten the range later as real catch data accumulates.
+
+```swift
+private static let speciesLengthRanges: [String: (min: Double, max: Double)] = [
+    "rainbow_trout":       (min: 10, max: 36),
+    "coho_salmon":         (min: 18, max: 36),  // NEW — typical caught range
+    "sea_run_trout":       (min: 8,  max: 20),
+    "steelhead_holding":   (min: 24, max: 42),
+    "steelhead_traveler":  (min: 24, max: 42),
+]
+```
+
+Both call sites use `if let range = Self.speciesLengthRanges[species]` — a missing key silently falls through to the wrong default rather than crashing, which is exactly why missing entries are easy to ship.
+
+## Step 7 — Build + simulator verification
 
 ```bash
 xcodebuild -workspace SkeenaSystem.xcworkspace \
@@ -123,7 +166,19 @@ For the bypass confirmation, search Console for the log line `Using species-scal
 
 **Regression check:** a known steelhead photo must still predict `steelhead_*` correctly. If it now predicts something else, the model package didn't take — re-check Step 1.
 
-## Step 7 — Commit, merge, clean up
+## Step 8 — Sync check (catches lockstep drift)
+
+Before committing, verify the five species lists are aligned:
+
+1. **`speciesLabels`** (`CatchPhotoAnalyzer.swift`) — source of truth, must match Python `ImageFolder` order.
+2. **`regressorBypassSpecies`** (same file) — every entry must exist in `speciesLabels`.
+3. **`speciesDisplayToLabel`** (same file) — every value must exist in `speciesLabels`; every key must appear in `speciesDisplayNames`.
+4. **`speciesLengthRanges`** (same file) — the new species has an entry; every key must exist in `speciesLabels`.
+5. **`speciesDisplayNames`** (`CatchChatViewModel.swift`) — every key must be the lifecycle-stripped form of at least one `speciesLabels` entry.
+
+A drift in any of these silently produces wrong regressor inputs, wrong heuristic length ranges, or wrong UI display. Manual audit for now — a unit test would be a worthy follow-up.
+
+## Step 9 — Commit, merge, clean up
 
 Once sim checks pass:
 
@@ -180,7 +235,7 @@ If the LengthRegressor was trained against the old indices, every species now se
 
 ## Related files for context
 
-- [`SkeenaSystem/Managers/CatchPhotoAnalyzer.swift`](../SkeenaSystem/Managers/CatchPhotoAnalyzer.swift) — all ML inference, `speciesLabels`, `regressorBypassSpecies`, `speciesLengthRanges`, `runViT`, `reEstimateLength`.
+- [`SkeenaSystem/Managers/CatchPhotoAnalyzer.swift`](../SkeenaSystem/Managers/CatchPhotoAnalyzer.swift) — all ML inference, `speciesLabels`, `regressorBypassSpecies`, `speciesDisplayToLabel`, `speciesLengthRanges`, `runViT`, `reEstimateLength`.
 - [`SkeenaSystem/ViewModels/CatchChatViewModel.swift`](../SkeenaSystem/ViewModels/CatchChatViewModel.swift) — `speciesDisplayNames`, `splitSpecies`, chat rendering.
 - [`SkeenaSystem/ViewModels/ResearcherCatchFlowManager.swift`](../SkeenaSystem/ViewModels/ResearcherCatchFlowManager.swift) — identification flow, Bi-catch tail branching.
 - [`.claude/CLAUDE.md`](../.claude/CLAUDE.md) — project rules (lifecycle-stage parser, nonisolated requirements, libz.tbd, etc.).

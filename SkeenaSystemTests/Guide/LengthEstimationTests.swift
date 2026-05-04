@@ -1,18 +1,25 @@
 import XCTest
 @testable import SkeenaSystem
 
-/// Tests for the length estimation logic that takes the high end of a range.
+/// Tests for the length-range collapsing logic.
 ///
-/// The `averagedLength` function in CatchChatViewModel is private, so we
-/// replicate its logic here to verify the behavior independently.
-/// This ensures that when the AI returns a length range (e.g. "28-32 inches"),
-/// we return the high end of the range rather than the average.
+/// `averagedLength` (in CatchChatViewModel) takes a heuristic length string —
+/// possibly a range like "28-32 inches" — and collapses it to the midpoint
+/// for backend persistence. The user-facing chat preserves the range string
+/// verbatim (see `formattedSummary`); the midpoint is what gets written to
+/// `initialAnalysis.lengthInches` in the upload payload.
+///
+/// `averagedLength` is internal, but we re-implement the same logic locally
+/// here as a sanity-check for the contract — if the production implementation
+/// drifts (e.g. someone reverts to high-end behavior), these tests still
+/// fail loudly without reaching into the view model's setUp.
 final class LengthEstimationTests: XCTestCase {
 
   // MARK: - Helper
 
-  /// Replicates the averagedLength logic from CatchChatViewModel for testability.
-  private func highEndLength(from raw: String) -> String {
+  /// Replicates the `averagedLength` logic from CatchChatViewModel: collapse
+  /// a range to its midpoint, leave a single value alone.
+  private func midpointLength(from raw: String) -> String {
     var cleaned = raw
       .replacingOccurrences(of: "inches", with: "")
       .replacingOccurrences(of: "inch", with: "")
@@ -32,11 +39,11 @@ final class LengthEstimationTests: XCTestCase {
         if parts.count == 2,
            let a = Double(parts[0]),
            let b = Double(parts[1]) {
-          let high = max(a, b)
-          if high.rounded() == high {
-            return "\(Int(high)) inches"
+          let mid = (a + b) / 2.0
+          if mid.rounded() == mid {
+            return "\(Int(mid)) inches"
           } else {
-            return String(format: "%.1f inches", high)
+            return String(format: "%.1f inches", mid)
           }
         }
       }
@@ -55,81 +62,88 @@ final class LengthEstimationTests: XCTestCase {
     return raw.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  // MARK: - Range Tests (High End)
+  // MARK: - Range Tests (midpoint)
 
-  func testRange_returnsHighEnd_hyphen() {
-    let result = highEndLength(from: "28-32 inches")
-    XCTAssertEqual(result, "32 inches", "Should return the high end of a hyphen range")
+  func testRange_returnsMidpoint_hyphen() {
+    XCTAssertEqual(midpointLength(from: "28-32 inches"), "30 inches",
+                   "Should return the midpoint of a hyphen range")
   }
 
-  func testRange_returnsHighEnd_enDash() {
-    let result = highEndLength(from: "28–32 inches")
-    XCTAssertEqual(result, "32 inches", "Should return the high end of an en-dash range")
+  func testRange_returnsMidpoint_enDash() {
+    XCTAssertEqual(midpointLength(from: "28–32 inches"), "30 inches",
+                   "Should return the midpoint of an en-dash range")
   }
 
-  func testRange_returnsHighEnd_emDash() {
-    let result = highEndLength(from: "28—32 inches")
-    XCTAssertEqual(result, "32 inches", "Should return the high end of an em-dash range")
+  func testRange_returnsMidpoint_emDash() {
+    XCTAssertEqual(midpointLength(from: "28—32 inches"), "30 inches",
+                   "Should return the midpoint of an em-dash range")
   }
 
-  func testRange_returnsHighEnd_noUnits() {
-    let result = highEndLength(from: "28-32")
-    XCTAssertEqual(result, "32 inches", "Should return high end and append inches even without unit")
+  func testRange_returnsMidpoint_noUnits() {
+    XCTAssertEqual(midpointLength(from: "28-32"), "30 inches",
+                   "Should return midpoint and append inches even without unit")
   }
 
-  func testRange_returnsHighEnd_withDecimals() {
-    let result = highEndLength(from: "27.5-32.5 inches")
-    XCTAssertEqual(result, "32.5 inches", "Should return high end with decimal")
+  func testRange_returnsMidpoint_withDecimals() {
+    // (27.5 + 32.5) / 2 = 30.0 — rounds to integer form.
+    XCTAssertEqual(midpointLength(from: "27.5-32.5 inches"), "30 inches",
+                   "Should return midpoint of decimal range")
   }
 
-  func testRange_returnsHighEnd_reversedOrder() {
-    // If range is given in reverse order, max() ensures we still get the high end
-    let result = highEndLength(from: "35-28 inches")
-    XCTAssertEqual(result, "35 inches", "Should return the higher value even if range is reversed")
+  func testRange_returnsMidpoint_decimalMidpoint() {
+    // (28 + 33) / 2 = 30.5 — preserved as decimal.
+    XCTAssertEqual(midpointLength(from: "28-33 inches"), "30.5 inches",
+                   "Should preserve decimal midpoint when bounds don't average to an integer")
   }
 
-  func testRange_notAverage() {
-    // The old behavior was to return 30 (average of 28 and 32)
-    let result = highEndLength(from: "28-32 inches")
-    XCTAssertNotEqual(result, "30 inches", "Should NOT return the average of the range")
+  func testRange_returnsMidpoint_reversedOrder() {
+    // Reversed-order bounds should still land on the same midpoint.
+    XCTAssertEqual(midpointLength(from: "32-28 inches"), "30 inches",
+                   "Midpoint is order-independent")
+  }
+
+  func testRange_notHighEnd() {
+    // Old behavior was to pick the high end (32) — guard against regression.
+    XCTAssertNotEqual(midpointLength(from: "28-32 inches"), "32 inches",
+                      "Should NOT return the high end of the range — that was the previous behavior")
   }
 
   // MARK: - Single Value Tests
 
   func testSingleValue_integer() {
-    let result = highEndLength(from: "32 inches")
-    XCTAssertEqual(result, "32 inches", "Should return single integer value as-is")
+    XCTAssertEqual(midpointLength(from: "32 inches"), "32 inches",
+                   "Should return single integer value as-is")
   }
 
   func testSingleValue_decimal() {
-    let result = highEndLength(from: "32.5 inches")
-    XCTAssertEqual(result, "32.5 inches", "Should return single decimal value as-is")
+    XCTAssertEqual(midpointLength(from: "32.5 inches"), "32.5 inches",
+                   "Should return single decimal value as-is")
   }
 
   func testSingleValue_noUnits() {
-    let result = highEndLength(from: "32")
-    XCTAssertEqual(result, "32 inches", "Should append inches to bare number")
+    XCTAssertEqual(midpointLength(from: "32"), "32 inches",
+                   "Should append inches to bare number")
   }
 
   // MARK: - Edge Cases
 
   func testEmptyString() {
-    let result = highEndLength(from: "")
-    XCTAssertEqual(result, "", "Should return empty string for empty input")
+    XCTAssertEqual(midpointLength(from: ""), "",
+                   "Should return empty string for empty input")
   }
 
   func testDash() {
-    let result = highEndLength(from: "-")
-    XCTAssertEqual(result, "-", "Should return dash for dash input")
+    XCTAssertEqual(midpointLength(from: "-"), "-",
+                   "Should return dash for dash input")
   }
 
   func testNonNumericInput() {
-    let result = highEndLength(from: "not available")
-    XCTAssertEqual(result, "not available", "Should return non-numeric input as-is")
+    XCTAssertEqual(midpointLength(from: "not available"), "not available",
+                   "Should return non-numeric input as-is")
   }
 
   func testWhitespaceHandling() {
-    let result = highEndLength(from: " 28 - 32 inches ")
-    XCTAssertEqual(result, "32 inches", "Should handle whitespace around range")
+    XCTAssertEqual(midpointLength(from: " 28 - 32 inches "), "30 inches",
+                   "Should handle whitespace around range")
   }
 }
