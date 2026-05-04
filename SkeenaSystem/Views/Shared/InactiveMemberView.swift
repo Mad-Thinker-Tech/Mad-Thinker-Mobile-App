@@ -18,6 +18,22 @@ struct InactiveMemberView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 24) {
+                HStack {
+                    Spacer()
+                    Button(action: logoutTapped) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.crop.circle.badge.xmark")
+                                .font(.title3.weight(.semibold))
+                            Text("Log out")
+                                .font(.footnote.weight(.semibold))
+                        }
+                        .foregroundColor(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("logoutCapsule")
+                }
+                .padding(.horizontal, 20)
+
                 Image(systemName: "person.crop.circle.badge.minus")
                     .font(.system(size: 56))
                     .foregroundColor(.orange)
@@ -83,6 +99,15 @@ struct InactiveMemberView: View {
         .sheet(isPresented: $showJoinCommunity) {
             JoinCommunityView()
                 .preferredColorScheme(.dark)
+        }
+    }
+
+    private func logoutTapped() {
+        Task {
+            await auth.signOutRemote()
+            await MainActor.run {
+                AuthStore.shared.clear()
+            }
         }
     }
 }
