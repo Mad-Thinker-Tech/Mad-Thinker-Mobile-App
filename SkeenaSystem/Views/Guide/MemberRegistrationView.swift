@@ -23,6 +23,7 @@ struct MemberRegistrationView: View {
   // MARK: - Form fields
 
   @State private var communityCode: String = ""
+  @State private var memberNumber: String = ""
 
   @State private var firstName: String = ""
   @State private var lastName: String = ""
@@ -42,11 +43,6 @@ struct MemberRegistrationView: View {
 
   @State private var isBusy = false
   @State private var errorText: String?
-
-  // MARK: - Policy URLs
-
-  private let privacyPolicyURL = URL(string: "https://madthinkertech.com/privacy-policy")!
-  private let acceptableUsePolicyURL = URL(string: "https://madthinkertech.com/acceptable-use-policy")!
 
   // MARK: - Password requirements
 
@@ -73,6 +69,10 @@ struct MemberRegistrationView: View {
     return code.range(of: #"^[A-Za-z0-9]{6}$"#, options: .regularExpression) != nil
   }
 
+  private var isMemberNumberValid: Bool {
+    MemberNumber.isValid(MemberNumber.normalize(memberNumber))
+  }
+
   private var allFieldsFilled: Bool {
     let base = !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -88,7 +88,7 @@ struct MemberRegistrationView: View {
 
   /// Validation for the invite-based registration path (no name/license required)
   private var canRegisterInvite: Bool {
-    !isBusy && isPasswordValid && isEmailValid && isCommunityCodeValid
+    !isBusy && isPasswordValid && isEmailValid && isCommunityCodeValid && isMemberNumberValid
   }
 
   // Shared style for compact fields
@@ -155,12 +155,12 @@ struct MemberRegistrationView: View {
         .frame(width: 120, height: 120)
         .clipShape(RoundedRectangle(cornerRadius: 16))
 
-      Text("Do you have a community code?")
+      Text("Do you have a community code and member number?")
         .font(.title3.weight(.semibold))
         .foregroundColor(.white)
         .multilineTextAlignment(.center)
 
-      Text("If your guide or community admin gave you a code, you can use it to quickly set up your account.")
+      Text("These would have been shared with you by your guide or community admin.")
         .font(.subheadline)
         .foregroundColor(.gray)
         .multilineTextAlignment(.center)
@@ -172,7 +172,7 @@ struct MemberRegistrationView: View {
         } label: {
           HStack {
             Image(systemName: "ticket")
-            Text("Yes, I have a code")
+            Text("Yes, I have both")
           }
           .font(.subheadline.weight(.semibold))
           .frame(maxWidth: .infinity)
@@ -233,6 +233,7 @@ struct MemberRegistrationView: View {
   private var inviteRegistrationForm: some View {
     VStack(spacing: 10) {
       communityCodeField
+      memberNumberField
       emailField
       passwordFields
     }
@@ -330,6 +331,29 @@ struct MemberRegistrationView: View {
     }
   }
 
+  @ViewBuilder
+  private var memberNumberField: some View {
+    fieldBackground(
+      TextField("Member Number (e.g. MAD4ZQ7H9)", text: $memberNumber)
+        .textInputAutocapitalization(.characters)
+        .autocorrectionDisabled()
+        .keyboardType(.asciiCapable)
+        .accessibilityIdentifier("memberNumber_registration")
+    )
+
+    if !memberNumber.isEmpty {
+      HStack(spacing: 4) {
+        Image(systemName: isMemberNumberValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+          .font(.caption2)
+          .foregroundColor(isMemberNumberValid ? .green : .red)
+        Text(isMemberNumberValid ? "Valid member number" : "Enter the 9-char code from your invite email")
+          .font(.caption2)
+          .foregroundColor(isMemberNumberValid ? .green : .red)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 4)
+    }
+  }
 
   @ViewBuilder
   private var nameFields: some View {
@@ -467,13 +491,13 @@ struct MemberRegistrationView: View {
         .font(.caption)
         .foregroundColor(.gray)
       HStack(spacing: 4) {
-        Link("Privacy Policy", destination: privacyPolicyURL)
+        Link("Privacy Policy", destination: LegalURLs.privacyPolicy)
           .font(.caption.weight(.semibold))
           .foregroundColor(.blue)
         Text("and")
           .font(.caption)
           .foregroundColor(.gray)
-        Link("Acceptable Use Policy", destination: acceptableUsePolicyURL)
+        Link("Acceptable Use Policy", destination: LegalURLs.acceptableUsePolicy)
           .font(.caption.weight(.semibold))
           .foregroundColor(.blue)
       }
@@ -539,8 +563,13 @@ struct MemberRegistrationView: View {
       errorText = "Please enter a valid 6-character community code."
       return
     }
+    guard isMemberNumberValid else {
+      errorText = "Please enter the member number from your invite email (e.g. MAD4ZQ7H9)."
+      return
+    }
 
     let code = communityCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    let memNum = MemberNumber.normalize(memberNumber)
 
     errorText = nil
     isBusy = true
@@ -548,7 +577,8 @@ struct MemberRegistrationView: View {
       try await auth.signUpWithInvite(
         email: email.trimmingCharacters(in: .whitespaces),
         password: password,
-        communityCode: code
+        communityCode: code,
+        memberNumber: memNum
       )
       dismiss()
     } catch {
@@ -698,5 +728,6 @@ struct MemberRegistrationView: View {
     errorText = nil
 
     communityCode = ""
+    memberNumber = ""
   }
 }

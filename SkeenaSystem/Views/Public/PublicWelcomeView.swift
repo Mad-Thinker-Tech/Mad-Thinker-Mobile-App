@@ -55,9 +55,6 @@ struct PublicWelcomeView: View {
   /// Optional so the profile-page re-presentation path can omit it.
   var onDismiss: (() -> Void)? = nil
 
-  private let privacyPolicyURL = URL(string: "https://madthinkertech.com/privacy-policy")!
-  private let acceptableUsePolicyURL = URL(string: "https://madthinkertech.com/acceptable-use-policy")!
-
   private var greetingTitle: String {
     Self.greetingTitle(firstName: AuthService.shared.currentFirstName)
   }
@@ -166,9 +163,9 @@ struct PublicWelcomeView: View {
 
   private var policyLinks: some View {
     VStack(spacing: 8) {
-      policyLinkRow(title: "Privacy Policy", icon: "lock.shield", url: privacyPolicyURL)
+      policyLinkRow(title: "Privacy Policy", icon: "lock.shield", url: LegalURLs.privacyPolicy)
         .accessibilityIdentifier("publicWelcomePrivacyLink")
-      policyLinkRow(title: "Acceptable Use Policy", icon: "doc.text", url: acceptableUsePolicyURL)
+      policyLinkRow(title: "Acceptable Use Policy", icon: "doc.text", url: LegalURLs.acceptableUsePolicy)
         .accessibilityIdentifier("publicWelcomeAcceptableUseLink")
     }
     .padding(.horizontal, 20)

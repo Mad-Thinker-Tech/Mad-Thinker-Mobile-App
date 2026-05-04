@@ -1,6 +1,6 @@
 {
   "version": "2026-05-01",
-  "generated": "2026-05-01T17:19:54.723Z",
+  "generated": "2026-05-04T16:21:26.015Z",
   "key_concepts": {
     "member_id": "UUID foreign key reference to a member record",
     "member_number": "Human-readable identifier in MAD Crockford Base32 format: MAD + 6 random chars (e.g., MAD4ZQ7H9)",
@@ -32,10 +32,16 @@
           "type": "string",
           "required": true,
           "description": "6-char community code from guide/admin"
+        },
+        "data.member_number": {
+          "type": "string",
+          "required": true,
+          "description": "9-char MAD-format member number from invite email (e.g. MAD4ZQ7H9)"
         }
       },
       "notes": [
         "Email must match the invite email exactly.",
+        "member_number must match the value tied to the pending invite for this community + email; signup is rejected otherwise.",
         "first_name, last_name, role populated from invite.",
         "member_id (member_number) populated from claimed member record."
       ]
@@ -691,15 +697,29 @@
       "name": "Join Community",
       "path": "/functions/v1/join-community",
       "method": "POST",
-      "description": "Join a community using its code.",
+      "description": "Join a community using its code. Requires a valid member_number tied to the pending invite for this community + email.",
       "auth": "required",
       "body": {
         "community_code": {
           "type": "string",
           "required": true,
           "description": "6-char community code"
+        },
+        "member_number": {
+          "type": "string",
+          "required": true,
+          "description": "9-char MAD-format member number from the invite email"
+        },
+        "role": {
+          "type": "string",
+          "required": false,
+          "description": "Optional; ignored if invite has a role"
         }
-      }
+      },
+      "notes": [
+        "Returns 400 if member_number is missing.",
+        "Returns 403 'Invalid member number for this community' if member_number does not match the pending invite."
+      ]
     },
     {
       "name": "Manage Community",

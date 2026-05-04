@@ -243,17 +243,23 @@ final class AuthService: ObservableObject {
   }
 
   /// Invite-Based Sign Up (Path A):
-  /// Only email, password, and community_code are sent. The server populates the
-  /// user's profile from a pending invite matching the email + community.
+  /// Only email, password, community_code, and member_number are sent. The server
+  /// populates the user's profile from a pending invite matching the email + community.
   func signUpWithInvite(
     email: String,
     password: String,
-    communityCode: String
+    communityCode: String,
+    memberNumber: String
   ) async throws {
     let commCode = communityCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     guard !commCode.isEmpty else { throw InputValidationError.invalidInput("Community code is required.") }
     let codeValid = commCode.range(of: #"^[A-Z0-9]{6}$"#, options: .regularExpression) != nil
     guard codeValid else { throw InputValidationError.invalidInput("Community code must be 6 alphanumeric characters.") }
+
+    let memNum = MemberNumber.normalize(memberNumber)
+    guard MemberNumber.isValid(memNum) else {
+      throw InputValidationError.invalidInput("Member number must be a 9-character MAD-format code (e.g. MAD4ZQ7H9).")
+    }
 
     AppLogging.log("signUpWithInvite -> email=\(email) communityCode=\(commCode)", level: .info, category: .auth)
 
@@ -266,7 +272,10 @@ final class AuthService: ObservableObject {
     let body: [String: Any] = [
       "email": email,
       "password": password,
-      "data": ["community_code": commCode]
+      "data": [
+        "community_code": commCode,
+        "member_number": memNum
+      ]
     ]
     req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 

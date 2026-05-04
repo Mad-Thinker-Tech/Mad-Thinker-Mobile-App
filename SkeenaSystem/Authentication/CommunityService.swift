@@ -302,11 +302,16 @@ final class CommunityService: ObservableObject {
 
     // MARK: - Join community
 
-    /// Join a new community using a 6-char code.
+    /// Join a new community using a 6-char code and the member number from the invite email.
     /// POST /functions/v1/join-community
-    func joinCommunity(code: String, role: String = "angler") async throws -> JoinCommunityResponse {
+    func joinCommunity(code: String, memberNumber: String, role: String = "angler") async throws -> JoinCommunityResponse {
         guard let token = await AuthService.shared.currentAccessToken() else {
             throw CommunityError.unauthenticated
+        }
+
+        let memNum = MemberNumber.normalize(memberNumber)
+        guard MemberNumber.isValid(memNum) else {
+            throw CommunityError.invalidMemberNumberFormat
         }
 
         let url = projectURL.appendingPathComponent("/functions/v1/join-community")
@@ -318,6 +323,7 @@ final class CommunityService: ObservableObject {
 
         let body: [String: String] = [
             "community_code": code.uppercased(),
+            "member_number": memNum,
             "role": role
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -345,6 +351,8 @@ final class CommunityService: ObservableObject {
             throw CommunityError.invalidCode
         case 400:
             throw CommunityError.invalidCodeFormat
+        case 403:
+            throw CommunityError.invalidMemberNumber
         default:
             throw CommunityError.serverError(statusCode, decoded.error ?? "Unknown error")
         }
@@ -441,6 +449,8 @@ enum CommunityError: LocalizedError {
     case unauthenticated
     case invalidCode
     case invalidCodeFormat
+    case invalidMemberNumberFormat
+    case invalidMemberNumber
     case alreadyMember(String)
     case serverError(Int, String)
 
@@ -452,6 +462,10 @@ enum CommunityError: LocalizedError {
             return "Community code not found or community is inactive."
         case .invalidCodeFormat:
             return "Invalid code format. Enter a 6-character alphanumeric code."
+        case .invalidMemberNumberFormat:
+            return "Invalid member number format. Enter the 9-character code from your invite email (e.g. MAD4ZQ7H9)."
+        case .invalidMemberNumber:
+            return "Member number does not match this community's invite. Check the code in your invite email."
         case .alreadyMember(let name):
             return "You are already a member of \(name)."
         case .serverError(let code, let message):

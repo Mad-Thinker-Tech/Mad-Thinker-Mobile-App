@@ -262,7 +262,7 @@ final class CommunitySwitcherRegressionTests: XCTestCase {
     XCTAssertFalse(svc.hasMultipleCommunities, "Should start with single community")
 
     // Join a second community
-    _ = try await svc.joinCommunity(code: "NEW001", role: "angler")
+    _ = try await svc.joinCommunity(code: "NEW001", memberNumber: "MAD4ZQ7H9", role: "angler")
 
     XCTAssertEqual(svc.memberships.count, 2, "Should now have two memberships after join")
     XCTAssertTrue(svc.hasMultipleCommunities, "Should now have multiple communities after join")

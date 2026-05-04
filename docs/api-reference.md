@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
 **Version:** 2026-05-01
-**Generated:** 2026-05-01T17:19:49.732Z
+**Generated:** 2026-05-04T16:21:03.588Z
 
 ## Key Concepts
 
@@ -30,10 +30,12 @@ Register with a community code. Profile is auto-populated from pending invite.
 | email | string | ✅ | User email |
 | password | string | ✅ | User password |
 | data.community_code | string | ✅ | 6-char community code from guide/admin |
+| data.member_number | string | ✅ | 9-char MAD-format member number from invite email (e.g. MAD4ZQ7H9) |
 
 **Notes:**
 
 - Email must match the invite email exactly.
+- member_number must match the value tied to the pending invite for this community + email; signup is rejected otherwise.
 - first_name, last_name, role populated from invite.
 - member_id (member_number) populated from claimed member record.
 
@@ -471,7 +473,7 @@ Manage trip roster assignments. Returns member_id (UUID) without legacy angler_i
 
 **POST** `/functions/v1/join-community`
 
-Join a community using its code.
+Join a community using its code. Requires a valid member_number tied to the pending invite for this community + email.
 
 **Auth:** required
 
@@ -480,6 +482,13 @@ Join a community using its code.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | community_code | string | ✅ | 6-char community code |
+| member_number | string | ✅ | 9-char MAD-format member number from the invite email |
+| role | string | ❌ | Optional; ignored if invite has a role |
+
+**Notes:**
+
+- Returns 400 if member_number is missing.
+- Returns 403 'Invalid member number for this community' if member_number does not match the pending invite.
 
 ---
 

@@ -131,6 +131,7 @@ struct ManageProfileView: View {
         if #available(iOS 16.0, *) {
           Form {
             profileFields
+            legalSection
             if auth.currentUserType == .public {
               appOverviewSection
               privacySection
@@ -142,6 +143,7 @@ struct ManageProfileView: View {
         } else {
           Form {
             profileFields
+            legalSection
             if auth.currentUserType == .public {
               appOverviewSection
               privacySection
@@ -214,6 +216,45 @@ struct ManageProfileView: View {
     .fullScreenCover(isPresented: $showAppOverview) {
       PublicWelcomeView()
     }
+  }
+
+  // MARK: - Legal (all users)
+
+  /// Required policy links shown in every user's profile, regardless of role.
+  /// Same URLs as MemberRegistrationView signup footer and PublicWelcomeView
+  /// first-login overview — keep them in sync if the marketing site moves.
+  @ViewBuilder
+  private var legalSection: some View {
+    Section {
+      Link(destination: LegalURLs.privacyPolicy) {
+        HStack {
+          Image(systemName: "lock.shield")
+          Text("Privacy Policy")
+          Spacer()
+          Image(systemName: "arrow.up.right.square")
+            .foregroundColor(.gray)
+        }
+        .foregroundColor(.blue)
+        .font(.callout)
+      }
+      .accessibilityIdentifier("manageProfilePrivacyPolicyLink")
+
+      Link(destination: LegalURLs.acceptableUsePolicy) {
+        HStack {
+          Image(systemName: "doc.text")
+          Text("Acceptable Use Policy")
+          Spacer()
+          Image(systemName: "arrow.up.right.square")
+            .foregroundColor(.gray)
+        }
+        .foregroundColor(.blue)
+        .font(.callout)
+      }
+      .accessibilityIdentifier("manageProfileAcceptableUsePolicyLink")
+    } header: {
+      Text("Legal")
+    }
+    .listRowBackground(Color.white.opacity(0.04))
   }
 
   // MARK: - App overview (public users only)

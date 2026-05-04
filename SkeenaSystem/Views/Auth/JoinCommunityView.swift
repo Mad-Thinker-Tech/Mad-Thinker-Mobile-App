@@ -13,6 +13,7 @@ struct JoinCommunityView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var code: String = ""
+    @State private var memberNumber: String = ""
     @State private var isBusy = false
     @State private var errorText: String?
     @State private var successText: String?
@@ -20,6 +21,14 @@ struct JoinCommunityView: View {
     private var isCodeValid: Bool {
         code.trimmingCharacters(in: .whitespacesAndNewlines)
             .range(of: #"^[A-Za-z0-9]{6,8}$"#, options: .regularExpression) != nil
+    }
+
+    private var isMemberNumberValid: Bool {
+        MemberNumber.isValid(MemberNumber.normalize(memberNumber))
+    }
+
+    private var canJoin: Bool {
+        isCodeValid && isMemberNumberValid && !isBusy
     }
 
     var body: some View {
@@ -46,39 +55,18 @@ struct JoinCommunityView: View {
                     }
                 }
 
-                // Code input + Join button
-                HStack(spacing: 10) {
-                    TextField("Code", text: $code)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .keyboardType(.asciiCapable)
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 12)
-                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-                        .foregroundColor(.white)
+                // Community code
+                TextField("Community Code", text: $code)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .keyboardType(.asciiCapable)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundColor(.white)
 
-                    Button {
-                        Task { await joinTapped() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if isBusy { ProgressView().tint(.white) }
-                            Text(isBusy ? "Joining…" : "Join")
-                                .font(.subheadline.bold())
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 18)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isCodeValid && !isBusy ? Color.blue : Color.blue.opacity(0.35))
-                        )
-                        .foregroundColor(.white)
-                    }
-                    .disabled(!isCodeValid || isBusy)
-                }
-
-                // Validation / feedback
                 if !code.isEmpty && !isCodeValid {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark.circle.fill")
@@ -88,7 +76,51 @@ struct JoinCommunityView: View {
                             .font(.caption2)
                             .foregroundColor(.red)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                // Member number (from invite email)
+                TextField("Member Number (e.g. MAD4ZQ7H9)", text: $memberNumber)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .keyboardType(.asciiCapable)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundColor(.white)
+
+                if !memberNumber.isEmpty && !isMemberNumberValid {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                        Text("Enter the 9-char code from your invite email")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Join button
+                Button {
+                    Task { await joinTapped() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isBusy { ProgressView().tint(.white) }
+                        Text(isBusy ? "Joining…" : "Join")
+                            .font(.subheadline.bold())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(canJoin ? Color.blue : Color.blue.opacity(0.35))
+                    )
+                    .foregroundColor(.white)
+                }
+                .disabled(!canJoin)
 
                 if let err = errorText {
                     Text(err)
@@ -121,7 +153,10 @@ struct JoinCommunityView: View {
         isBusy = true
 
         do {
-            let result = try await CommunityService.shared.joinCommunity(code: code)
+            let result = try await CommunityService.shared.joinCommunity(
+                code: code,
+                memberNumber: memberNumber
+            )
             successText = "Joined \(result.communityName ?? "community") as \(result.role ?? "member")!"
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             dismiss()

@@ -292,7 +292,7 @@ final class CommunityServiceTests: XCTestCase {
     }
 
     let svc = CommunityService.shared
-    let result = try await svc.joinCommunity(code: "NEW001", role: "angler")
+    let result = try await svc.joinCommunity(code: "NEW001", memberNumber: "MAD4ZQ7H9", role: "angler")
 
     XCTAssertEqual(result.success, true)
     XCTAssertEqual(result.communityName, "New Community")
@@ -316,7 +316,7 @@ final class CommunityServiceTests: XCTestCase {
     }
 
     do {
-      _ = try await CommunityService.shared.joinCommunity(code: "BADCOD", role: "angler")
+      _ = try await CommunityService.shared.joinCommunity(code: "BADCOD", memberNumber: "MAD4ZQ7H9", role: "angler")
       XCTFail("Expected invalidCode error")
     } catch let error as CommunityError {
       if case .invalidCode = error {
@@ -348,7 +348,7 @@ final class CommunityServiceTests: XCTestCase {
     }
 
     do {
-      _ = try await CommunityService.shared.joinCommunity(code: "EWA001", role: "guide")
+      _ = try await CommunityService.shared.joinCommunity(code: "EWA001", memberNumber: "MAD4ZQ7H9", role: "guide")
       XCTFail("Expected alreadyMember error")
     } catch let error as CommunityError {
       if case .alreadyMember(let name) = error {
@@ -364,13 +364,58 @@ final class CommunityServiceTests: XCTestCase {
   func testJoinCommunity_noAuth_throws() async {
     // No access token
     do {
-      _ = try await CommunityService.shared.joinCommunity(code: "ABC123", role: "angler")
+      _ = try await CommunityService.shared.joinCommunity(code: "ABC123", memberNumber: "MAD4ZQ7H9", role: "angler")
       XCTFail("Expected unauthenticated error")
     } catch let error as CommunityError {
       if case .unauthenticated = error {
         // Expected
       } else {
         XCTFail("Expected .unauthenticated, got \(error)")
+      }
+    } catch {
+      XCTFail("Unexpected error type: \(error)")
+    }
+  }
+
+  func testJoinCommunity_invalidMemberNumber_throws() async {
+    setAccessToken("valid-token")
+
+    let errorResponse: [String: Any] = ["error": "Invalid member number for this community"]
+    let errorData = try! JSONSerialization.data(withJSONObject: errorResponse)
+
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/functions/v1/join-community") {
+        return (HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: nil)!, errorData)
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    do {
+      _ = try await CommunityService.shared.joinCommunity(code: "EWA001", memberNumber: "MAD4ZQ7H9", role: "angler")
+      XCTFail("Expected invalidMemberNumber error")
+    } catch let error as CommunityError {
+      if case .invalidMemberNumber = error {
+        // Expected
+      } else {
+        XCTFail("Expected .invalidMemberNumber, got \(error)")
+      }
+    } catch {
+      XCTFail("Unexpected error type: \(error)")
+    }
+  }
+
+  func testJoinCommunity_invalidMemberNumberFormat_throws() async {
+    setAccessToken("valid-token")
+
+    do {
+      _ = try await CommunityService.shared.joinCommunity(code: "EWA001", memberNumber: "BADFORMAT", role: "angler")
+      XCTFail("Expected invalidMemberNumberFormat error")
+    } catch let error as CommunityError {
+      if case .invalidMemberNumberFormat = error {
+        // Expected — client-side format guard before any network call
+      } else {
+        XCTFail("Expected .invalidMemberNumberFormat, got \(error)")
       }
     } catch {
       XCTFail("Unexpected error type: \(error)")
