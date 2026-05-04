@@ -70,14 +70,70 @@ final class AuthService: ObservableObject {
 
   private init(session: URLSession = .shared) {
     self.session = session
-    let token = Keychain.get(kAccessToken)
-    let exp = Keychain.get(kAccessTokenExp).flatMap { Double($0) }
-    let valid = Self.isJWTValid(accessToken: token, expSeconds: exp)
-    self.isAuthenticated = valid || Keychain.get(kRefreshToken) != nil
-    AppLogging.log("init: token.len=\(token?.count ?? 0) exp=\(exp ?? -1) valid=\(valid) host=\(projectURL.host ?? "?") hasRefresh=\(Keychain.get(kRefreshToken) != nil)", level: .debug, category: .auth)
+
+    // Hydrate cached auth state so AppRootView can route to the correct landing
+    // view on a cold offline launch. Without this, isAuthenticated=true (from a
+    // stored refresh token) leaves currentUserType=nil and the app sits on a
+    // loading spinner forever because loadUserProfile() needs the network.
+    let cached = Self.loadCachedAuthState()
+    self.isAuthenticated = cached.isAuthenticated
+    self.currentFirstName = cached.firstName
+    self.currentLastName = cached.lastName
+    self.currentUserType = cached.userType
+    self.currentMemberId = cached.memberId
+
+    AppLogging.log("init: hasAccess=\(cached.hasAccessToken) accessValid=\(cached.accessTokenValid) host=\(projectURL.host ?? "?") hasRefresh=\(cached.hasRefreshToken) cachedType=\(cached.userType?.rawValue ?? "<nil>") cachedMember=\(cached.memberId ?? "<nil>")", level: .debug, category: .auth)
 
     // IMPORTANT: Do not start network I/O from init(). Any early refresh should be invoked
     // explicitly from app lifecycle (e.g., AppRootView.task or similar).
+  }
+
+  /// Snapshot of the auth state derived from on-disk caches (Keychain + UserDefaults).
+  /// Pure read — no mutation, no network. Exposed at internal visibility so
+  /// regression tests can verify offline cold-launch hydration without
+  /// reassigning the `shared` singleton (which is flaky to deinit on iOS 26.2 sim).
+  internal struct CachedAuthState: Equatable {
+    let isAuthenticated: Bool
+    let firstName: String?
+    let lastName: String?
+    let userType: UserType?
+    let memberId: String?
+    let hasAccessToken: Bool
+    let accessTokenValid: Bool
+    let hasRefreshToken: Bool
+  }
+
+  internal static func loadCachedAuthState() -> CachedAuthState {
+    let kAccessToken = "epicwaters.auth.access_token"
+    let kAccessTokenExp = "epicwaters.auth.access_token_exp"
+    let kRefreshToken = "epicwaters.auth.refresh_token"
+    let kCachedFirstName = "CachedFirstName"
+    let kCachedLastName = "CachedLastName"
+    let kCachedUserType = "CachedUserType"
+    let kCachedMemberId = "CachedMemberId"
+
+    let token = Keychain.get(kAccessToken)
+    let exp = Keychain.get(kAccessTokenExp).flatMap { Double($0) }
+    let accessValid = isJWTValid(accessToken: token, expSeconds: exp)
+    let hasRefresh = Keychain.get(kRefreshToken) != nil
+
+    let userType: UserType?
+    if let raw = UserDefaults.standard.string(forKey: kCachedUserType) {
+      userType = UserType(rawValue: raw)
+    } else {
+      userType = nil
+    }
+
+    return CachedAuthState(
+      isAuthenticated: accessValid || hasRefresh,
+      firstName: UserDefaults.standard.string(forKey: kCachedFirstName),
+      lastName: UserDefaults.standard.string(forKey: kCachedLastName),
+      userType: userType,
+      memberId: UserDefaults.standard.string(forKey: kCachedMemberId),
+      hasAccessToken: token != nil,
+      accessTokenValid: accessValid,
+      hasRefreshToken: hasRefresh
+    )
   }
 
   // MARK: - Public API
