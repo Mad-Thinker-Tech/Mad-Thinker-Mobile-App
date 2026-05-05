@@ -30,7 +30,7 @@ public enum NoCatchEventType: String, Codable, CaseIterable {
 
 // MARK: - Model
 
-public struct FarmedReport: Identifiable, Codable, Equatable {
+public nonisolated struct FarmedReport: Identifiable, Codable, Equatable {
   // Identity
   public let id: UUID
   public var createdAt: Date

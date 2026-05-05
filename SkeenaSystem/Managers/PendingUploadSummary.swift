@@ -18,15 +18,25 @@ nonisolated final class PendingUploadSummary: ObservableObject {
     observations: ObservationStore.shared.$observations
       .map { $0.filter { $0.status == .savedLocally }.count }
       .eraseToAnyPublisher(),
-    farmedReports: FarmedReportStore.shared.$reports
+    farmedReports: FarmedReportStore.shared.reportsPublisher
       .map { $0.filter { $0.status == .savedLocally }.count }
       .eraseToAnyPublisher(),
-    catchReports: CatchReportStore.shared.$reports
+    catchReports: CatchReportStore.shared.reportsPublisher
       .map { $0.filter { $0.status == .savedLocally }.count }
       .eraseToAnyPublisher()
   )
 
-  @Published private(set) var totalPending: Int = 0
+  // Manual publisher (see `CatchReportStore` for the rationale — `@Published`
+  // is incompatible with the class-level `nonisolated`).
+  private let _totalPending = CurrentValueSubject<Int, Never>(0)
+  private(set) var totalPending: Int {
+    get { _totalPending.value }
+    set {
+      objectWillChange.send()
+      _totalPending.send(newValue)
+    }
+  }
+  var totalPendingPublisher: AnyPublisher<Int, Never> { _totalPending.eraseToAnyPublisher() }
 
   private var cancellables = Set<AnyCancellable>()
 

@@ -28,7 +28,20 @@ import Foundation
 nonisolated final class CatchReportStore: ObservableObject {
   static let shared = CatchReportStore()
 
-  @Published private(set) var reports: [CatchReport] = []
+  // `@Published` is incompatible with the class-level `nonisolated` (which is
+  // load-bearing for the iOS 26.2 deinit-crash mitigation above), so we drive
+  // the publisher manually. SwiftUI consumers observe via `objectWillChange`;
+  // non-SwiftUI consumers (e.g. `PendingUploadSummary`) subscribe to
+  // `reportsPublisher`.
+  private let _reports = CurrentValueSubject<[CatchReport], Never>([])
+  private(set) var reports: [CatchReport] {
+    get { _reports.value }
+    set {
+      objectWillChange.send()
+      _reports.send(newValue)
+    }
+  }
+  var reportsPublisher: AnyPublisher<[CatchReport], Never> { _reports.eraseToAnyPublisher() }
 
   /// Count of catch reports still waiting to be uploaded.
   var pendingCount: Int {

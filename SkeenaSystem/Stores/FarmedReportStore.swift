@@ -24,7 +24,18 @@ import Foundation
 nonisolated final class FarmedReportStore: ObservableObject {
   static let shared = FarmedReportStore()
 
-  @Published private(set) var reports: [FarmedReport] = []
+  // See `CatchReportStore` for why we drive the publisher manually instead
+  // of using `@Published` (property wrappers don't combine with the
+  // class-level `nonisolated` in Swift 6).
+  private let _reports = CurrentValueSubject<[FarmedReport], Never>([])
+  private(set) var reports: [FarmedReport] {
+    get { _reports.value }
+    set {
+      objectWillChange.send()
+      _reports.send(newValue)
+    }
+  }
+  var reportsPublisher: AnyPublisher<[FarmedReport], Never> { _reports.eraseToAnyPublisher() }
 
   /// Count of farmed reports still waiting to be uploaded.
   var pendingCount: Int {

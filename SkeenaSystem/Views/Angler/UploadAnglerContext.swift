@@ -39,9 +39,8 @@ enum UploadAnglerContext {
 
     AppLogging.log("[Proficiency] Request URL: \(url.absoluteString)", level: .debug, category: .network)
 
-    let (data, response) = try await URLSession.shared.data(for: req)
+    let (_, response) = try await URLSession.shared.data(for: req)
     let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-    let responseBody = String(data: data, encoding: .utf8) ?? "<non-utf8>"
 
     AppLogging.log("[Proficiency] Response status: \(code)", level: .debug, category: .network)
 

@@ -12,7 +12,7 @@ public enum CatchReportStatus: String, Codable, CaseIterable {
 
 // MARK: - Main model
 
-public struct CatchReport: Identifiable, Codable, Equatable {
+public nonisolated struct CatchReport: Identifiable, Codable, Equatable {
   // Local identity
   public let id: UUID // local ID (for JSON filename, SwiftUI IDs)
   public var createdAt: Date

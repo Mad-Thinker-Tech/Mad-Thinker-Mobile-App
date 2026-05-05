@@ -46,7 +46,7 @@ final class PendingUploadSummaryTests: XCTestCase {
   /// Updates arrive on the main run loop via `.receive(on: DispatchQueue.main)`.
   private func waitForTotal(_ expected: Int, timeout: TimeInterval = 1.0) {
     let exp = expectation(description: "totalPending == \(expected)")
-    summary.$totalPending
+    summary.totalPendingPublisher
       .filter { $0 == expected }
       .first()
       .sink { _ in exp.fulfill() }

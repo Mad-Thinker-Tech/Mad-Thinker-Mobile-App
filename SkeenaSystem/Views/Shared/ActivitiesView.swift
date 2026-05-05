@@ -70,10 +70,6 @@ struct ActivitiesView: View {
   // MARK: - Catch uploader factory (mirrors ReportsListView pattern)
 
   private var catchUploader: UploadCatchReport {
-    let rawBase = ((Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String) ?? "")
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let baseWithScheme = rawBase.isEmpty ? "" :
-      (rawBase.hasPrefix("http") ? rawBase : "https://\(rawBase)")
     let apiKey = ((Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String) ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines)
 

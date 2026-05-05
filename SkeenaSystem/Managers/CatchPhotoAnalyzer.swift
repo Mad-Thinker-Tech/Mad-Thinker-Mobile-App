@@ -685,8 +685,8 @@ final class CatchPhotoAnalyzer {
     if let dict = output.featureValue(for: "classLabel_probs")?.dictionaryValue {
       var values: [(label: String, value: Float)] = []
       for (k, v) in dict {
-        if let key = k as? String, let prob = v as? NSNumber {
-          values.append((label: key.lowercased(), value: prob.floatValue))
+        if let key = k as? String {
+          values.append((label: key.lowercased(), value: v.floatValue))
         }
       }
 
@@ -727,7 +727,7 @@ final class CatchPhotoAnalyzer {
   /// Applies same sanity filters as the Python training pipeline.
   private func detectHand(on image: UIImage) -> HandMeasurement? {
     #if canImport(MediaPipeTasksVision)
-    guard let cgImage = image.cgImage else { return nil }
+    guard image.cgImage != nil else { return nil }
 
     // Lazy-cache the HandLandmarker so the .task model is only loaded once.
     if Self._handLandmarker == nil {
@@ -973,7 +973,7 @@ final class CatchPhotoAnalyzer {
   ]
 
   /// All 26 features for the length regressor, in FEATURE_COLS order. Codable for upload to Supabase.
-  struct LengthFeatureVector: Codable {
+  nonisolated struct LengthFeatureVector: Codable {
     // Base features
     let fishBoxWidth: Double
     let fishBoxHeight: Double
