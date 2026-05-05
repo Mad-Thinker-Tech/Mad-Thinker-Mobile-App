@@ -126,9 +126,14 @@ final class CommunityService: ObservableObject {
         }
 
         // Build URL: GET /rest/v1/user_communities with nested joins for branding, geography + entitlements
+        // `left_at=is.null` excludes rows soft-deleted by /functions/v1/leave-community
+        // so a community the user has left never reappears in the picker. Defensive
+        // even if backend RLS already filters these — PostgREST silently no-ops the
+        // filter when no matching rows exist.
         var comps = URLComponents(url: projectURL.appendingPathComponent("/rest/v1/user_communities"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
-            URLQueryItem(name: "select", value: "id,community_id,role,is_active,communities(id,name,code,is_active,community_type_id,logo_url,logo_asset_name,tagline,display_name,learn_url,custom_urls,donation_url,donation_description,geography,units,community_types(id,name,entitlements))")
+            URLQueryItem(name: "select", value: "id,community_id,role,is_active,communities(id,name,code,is_active,community_type_id,logo_url,logo_asset_name,tagline,display_name,learn_url,custom_urls,donation_url,donation_description,geography,units,community_types(id,name,entitlements))"),
+            URLQueryItem(name: "left_at", value: "is.null")
         ]
 
         var request = URLRequest(url: comps.url!)
@@ -356,6 +361,56 @@ final class CommunityService: ObservableObject {
         default:
             throw CommunityError.serverError(statusCode, decoded.error ?? "Unknown error")
         }
+    }
+
+    // MARK: - Leave community
+
+    /// Leave the given community. Server soft-deletes the user_communities row
+    /// (sets left_at) and preserves dependent records (catch reports, trips,
+    /// voice notes, forum posts). Caller identity comes from the JWT — never
+    /// the body. Idempotent: a 404 'not_a_member' is treated as success.
+    /// POST /functions/v1/leave-community
+    func leaveCommunity(communityId: String) async throws {
+        guard let token = await AuthService.shared.currentAccessToken() else {
+            throw CommunityError.unauthenticated
+        }
+
+        let url = projectURL.appendingPathComponent("/functions/v1/leave-community")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+
+        let body: [String: String] = ["community_id": communityId]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+
+        switch statusCode {
+        case 200:
+            AppLogging.log("[CommunityService] Left community: id=\(communityId)", level: .info, category: .community)
+        case 404:
+            // Idempotent: server reports 'not_a_member' if the row was already left/missing.
+            AppLogging.log("[CommunityService] Leave community 404 not_a_member — already left, treating as success", level: .info, category: .community)
+        case 401:
+            throw CommunityError.unauthenticated
+        default:
+            let bodyText = String(data: data, encoding: .utf8) ?? ""
+            AppLogging.log("[CommunityService] Leave community failed status=\(statusCode) body=\(bodyText)", level: .error, category: .community)
+            throw CommunityError.serverError(statusCode, bodyText)
+        }
+
+        // Clear the active selection if it was the community we just left,
+        // then refresh memberships so the picker / single-community auto-select
+        // logic in fetchMemberships() can route the user to the right next state.
+        await MainActor.run {
+            if self.activeCommunityId == communityId {
+                self.clearActiveCommunity()
+            }
+        }
+        await fetchMemberships()
     }
 
     // MARK: - Fetch add-ons

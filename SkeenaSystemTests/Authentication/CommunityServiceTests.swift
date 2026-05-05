@@ -422,6 +422,177 @@ final class CommunityServiceTests: XCTestCase {
     }
   }
 
+  // MARK: - Tests: fetchMemberships query filters
+
+  func testFetchMemberships_filtersOutLeftCommunities_viaLeftAtIsNull() async {
+    setAccessToken("valid-token")
+
+    var capturedURL: URL?
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/rest/v1/user_communities") {
+        capturedURL = url
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("[]".utf8))
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    await CommunityService.shared.fetchMemberships()
+
+    XCTAssertNotNil(capturedURL)
+    let comps = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)
+    let leftAt = comps?.queryItems?.first(where: { $0.name == "left_at" })
+    XCTAssertEqual(leftAt?.value, "is.null",
+                   "Membership fetch must filter out soft-deleted (left) memberships, otherwise communities the user has left would reappear in the picker")
+  }
+
+  // MARK: - Tests: Leave community
+
+  /// Captures the JSON body of an HTTP request made via MockURLProtocol.
+  /// URLProtocol replays bodies via httpBodyStream, so a direct `request.httpBody`
+  /// read returns nil — we drain the stream just like the signup test does.
+  private static func captureBody(_ request: URLRequest) -> [String: Any]? {
+    guard let stream = request.httpBodyStream else { return nil }
+    stream.open()
+    defer { stream.close() }
+    let bufferSize = 65536
+    var data = Data()
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+    defer { buffer.deallocate() }
+    while stream.hasBytesAvailable {
+      let read = stream.read(buffer, maxLength: bufferSize)
+      if read > 0 { data.append(buffer, count: read) }
+    }
+    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+  }
+
+  func testLeaveCommunity_success_clearsActiveAndRefreshes() async throws {
+    setAccessToken("valid-token")
+
+    // After leave, fetchMemberships returns the user's remaining communities.
+    let remaining = makeSingleMembership(communityId: "c-other", communityName: "Other", role: "angler", code: "OTH001")
+    let remainingData = makeMembershipsJSON([remaining])
+
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/functions/v1/leave-community") {
+        let body = Data("{\"success\":true}".utf8)
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+      }
+      if url.path.contains("/rest/v1/user_communities") {
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, remainingData)
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    let svc = CommunityService.shared
+    // Pretend the user was actively in c-1 before leaving.
+    UserDefaults.standard.set("c-1", forKey: "CommunityService.activeCommunityId")
+    UserDefaults.standard.set("guide", forKey: "CommunityService.activeRole")
+
+    try await svc.leaveCommunity(communityId: "c-1")
+
+    // c-1 was the active community, so leaving it should have cleared the
+    // active selection. The single remaining community auto-selects via
+    // fetchMemberships's single-community path.
+    XCTAssertEqual(svc.activeCommunityId, "c-other",
+                   "Single remaining community should auto-select after leave")
+    XCTAssertEqual(svc.memberships.count, 1)
+  }
+
+  func testLeaveCommunity_postsCommunityIdInBody() async throws {
+    setAccessToken("valid-token")
+
+    var capturedBody: [String: Any]?
+    var capturedMethod: String?
+    let emptyMembershipsData = makeMembershipsJSON([])
+
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/functions/v1/leave-community") {
+        capturedBody = Self.captureBody(request)
+        capturedMethod = request.httpMethod
+        let body = Data("{\"success\":true}".utf8)
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
+      }
+      if url.path.contains("/rest/v1/user_communities") {
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, emptyMembershipsData)
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    try await CommunityService.shared.leaveCommunity(communityId: "comm-uuid-42")
+
+    XCTAssertEqual(capturedMethod, "POST")
+    XCTAssertEqual(capturedBody?["community_id"] as? String, "comm-uuid-42")
+    // Spec: "passing user_id in the body returns 400" — never include it.
+    XCTAssertNil(capturedBody?["user_id"],
+                 "Must not pass user_id in body — server rejects with 400")
+  }
+
+  func testLeaveCommunity_idempotent404_treatedAsSuccess() async throws {
+    setAccessToken("valid-token")
+
+    let emptyMembershipsData = makeMembershipsJSON([])
+
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/functions/v1/leave-community") {
+        let body = Data("{\"error\":\"not_a_member\"}".utf8)
+        return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, body)
+      }
+      if url.path.contains("/rest/v1/user_communities") {
+        return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, emptyMembershipsData)
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    // Should NOT throw — server idempotency means 404 is success-equivalent.
+    try await CommunityService.shared.leaveCommunity(communityId: "already-left")
+  }
+
+  func testLeaveCommunity_unauthenticated_throws() async {
+    // No access token set — service should fail fast before making a request.
+    do {
+      try await CommunityService.shared.leaveCommunity(communityId: "c-1")
+      XCTFail("Expected unauthenticated error")
+    } catch let error as CommunityError {
+      if case .unauthenticated = error {
+        // Expected
+      } else {
+        XCTFail("Expected .unauthenticated, got \(error)")
+      }
+    } catch {
+      XCTFail("Unexpected error type: \(error)")
+    }
+  }
+
+  func testLeaveCommunity_serverError_throws() async {
+    setAccessToken("valid-token")
+
+    MockURLProtocol.requestHandler = { request in
+      guard let url = request.url else { throw URLError(.badURL) }
+      if url.path.contains("/functions/v1/leave-community") {
+        let body = Data("{\"error\":\"internal\"}".utf8)
+        return (HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil)!, body)
+      }
+      return (HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!, nil)
+    }
+
+    do {
+      try await CommunityService.shared.leaveCommunity(communityId: "c-1")
+      XCTFail("Expected serverError")
+    } catch let error as CommunityError {
+      if case .serverError(let code, _) = error {
+        XCTAssertEqual(code, 500)
+      } else {
+        XCTFail("Expected .serverError, got \(error)")
+      }
+    } catch {
+      XCTFail("Unexpected error type: \(error)")
+    }
+  }
+
   // MARK: - Tests: Signup uses community_code
 
   func testSignUp_sendsCommunityCodeInPayload() async throws {

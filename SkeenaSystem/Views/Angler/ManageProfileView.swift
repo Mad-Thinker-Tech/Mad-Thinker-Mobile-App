@@ -101,6 +101,7 @@ struct ManageProfileView: View {
   @State private var showDeleteAccountConfirm = false
   @State private var deleteConfirmationInput = ""
   @State private var isDeletingAccount = false
+  @State private var isLeavingCommunity = false
 
   // Optional so we can distinguish "never set" (nil) from "intentionally set".
   // Previously defaulted to `Date()` which caused today's date to be silently
@@ -197,7 +198,7 @@ struct ManageProfileView: View {
       Button("Cancel", role: .cancel) {}
       Button("OK", role: .destructive) { Task { await leaveCommunityTapped() } }
     } message: {
-      Text("This cannot be undone. All member data associated with \(communityService.activeCommunityName) will be permanently deleted.")
+      Text("Once you leave the community, you will need to be re-invited by the community administrator.")
     }
     .alert("Delete Mad Thinker Account?", isPresented: $showDeleteAccountConfirm) {
       TextField("Type DELETE", text: $deleteConfirmationInput)
@@ -329,12 +330,17 @@ struct ManageProfileView: View {
         showLeaveCommunityConfirm = true
       } label: {
         HStack {
-          Image(systemName: "person.fill.xmark")
+          if isLeavingCommunity {
+            ProgressView()
+          } else {
+            Image(systemName: "person.fill.xmark")
+          }
           Text("Leave \(communityService.activeCommunityName)")
         }
         .font(.callout.weight(.semibold))
         .foregroundColor(.brandError)
       }
+      .disabled(isLeavingCommunity)
       .accessibilityIdentifier("leaveCommunityButton")
 
       Button(role: .destructive) {
@@ -361,11 +367,27 @@ struct ManageProfileView: View {
   // MARK: - Destructive actions (backend stubs)
 
   private func leaveCommunityTapped() async {
-    // TODO: Call backend `leave-community` service. On success, sign out so
-    // AppRootView returns the user to the login screen.
-    AppLogging.log("[ManageProfile] Leave community tapped — backend not yet wired.", level: .info, category: .auth)
-    await MainActor.run {
-      infoText = "Leave Community is coming soon."
+    errorText = nil
+    infoText = nil
+
+    guard let communityId = communityService.activeCommunityId else {
+      errorText = "No active community to leave."
+      return
+    }
+
+    isLeavingCommunity = true
+    defer { isLeavingCommunity = false }
+
+    do {
+      try await communityService.leaveCommunity(communityId: communityId)
+      AppLogging.log("[ManageProfile] Left community \(communityId) — dismissing", level: .info, category: .community)
+      await MainActor.run { dismiss() }
+    } catch let err as CommunityError {
+      errorText = err.errorDescription
+      AppLogging.log("[ManageProfile] Leave community failed: \(err)", level: .error, category: .community)
+    } catch {
+      errorText = "Could not leave the community: \(error.localizedDescription)"
+      AppLogging.log("[ManageProfile] Leave community error: \(error)", level: .error, category: .community)
     }
   }
 

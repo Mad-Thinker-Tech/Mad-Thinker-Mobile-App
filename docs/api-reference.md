@@ -1,7 +1,7 @@
 # Mad Thinker Platform API Reference
 
 **Version:** 2026-05-01
-**Generated:** 2026-05-05T21:13:45.883Z
+**Generated:** 2026-05-05T23:21:23.360Z
 
 ## Key Concepts
 
@@ -489,6 +489,33 @@ Join a community using its code. Requires a valid member_number tied to the pend
 
 - Returns 400 if member_number is missing.
 - Returns 403 'Invalid member number for this community' if member_number does not match the pending invite.
+
+---
+
+## Leave Community
+
+**POST** `/functions/v1/leave-community`
+
+Soft-deletes the caller's own membership in a community by setting user_communities.left_at. Idempotent. Caller identity is taken from the JWT — never from the body. Dependent records (catch_reports, trips, voice_notes, forum_*, etc.) are preserved.
+
+**Auth:** required
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| community_id | uuid | ✅ | Community UUID the caller wants to leave |
+
+**Response:**
+
+- `success`: boolean
+
+**Notes:**
+
+- Self-only: passing user_id in the body returns 400. Admin removal is a separate endpoint.
+- Idempotent: re-leaving an already-left community returns 200 without changing the original left_at.
+- Returns 404 'not_a_member' if the caller has no membership row for that community.
+- Returns 401 if Authorization header is missing or token is invalid.
 
 ---
 
