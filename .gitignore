@@ -25,3 +25,6 @@ SkeenaSystem/Config/Secrets.xcconfig
 !.claude/settings.json
 !.claude/list-commands.sh
 
+# Babysitter logs
+.a5c/logs/
+
