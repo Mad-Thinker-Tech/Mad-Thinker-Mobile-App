@@ -27,4 +27,5 @@ SkeenaSystem/Config/Secrets.xcconfig
 
 # Babysitter framework state (logs, journal, run metadata)
 .a5c/
+babysitter*.log
 
