@@ -15,7 +15,7 @@ import Foundation
 /// iOS 26.2 sim `swift_task_deinitOnExecutorMainActorBackDeploy` double-free.
 nonisolated final class PendingUploadSummary: ObservableObject {
   static let shared: PendingUploadSummary = PendingUploadSummary(
-    observations: ObservationStore.shared.$observations
+    observations: ObservationStore.shared.observationsPublisher
       .map { $0.filter { $0.status == .savedLocally }.count }
       .eraseToAnyPublisher(),
     farmedReports: FarmedReportStore.shared.reportsPublisher

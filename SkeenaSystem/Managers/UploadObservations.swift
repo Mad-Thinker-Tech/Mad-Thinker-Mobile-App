@@ -196,7 +196,7 @@ nonisolated final class UploadObservations {
         sampleRate: obs.voiceSampleRate ?? 16000,
         format: obs.voiceFormat ?? "m4a",
         transcript: obs.transcript,
-        communityId: CommunityService.shared.activeCommunityId,
+        communityId: CommunityService.shared.activeCommunityIdSnapshot,
         location: locationDTO,
         audio: audioDTO
       )
@@ -224,7 +224,7 @@ nonisolated final class UploadObservations {
     let apiKey = AppEnvironment.shared.anonKey
 
     AppLogging.log("[UploadObservations] Endpoint: \(endpoint.absoluteString)", level: .info, category: .network)
-    AppLogging.log("[UploadObservations] DTOs count: \(dtos.count), memberId: \(normalizedMemberId), communityId: \(CommunityService.shared.activeCommunityId ?? "nil")", level: .info, category: .network)
+    AppLogging.log("[UploadObservations] DTOs count: \(dtos.count), memberId: \(normalizedMemberId), communityId: \(CommunityService.shared.activeCommunityIdSnapshot ?? "nil")", level: .info, category: .network)
 
     if let jsonString = String(data: bodyData, encoding: .utf8) {
       // Truncate audio base64 to keep logs readable — replace data_base64

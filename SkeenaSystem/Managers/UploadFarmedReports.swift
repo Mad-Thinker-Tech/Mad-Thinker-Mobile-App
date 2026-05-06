@@ -137,7 +137,7 @@ nonisolated final class UploadFarmedReports {
     let name = RiverLocator.shared.riverName(near: location)
     if name.isEmpty {
       return WaterBodyLocator.shared.waterBodyName(at: location)
-             ?? CommunityService.shared.activeCommunityConfig.resolvedDefaultRiver
+             ?? CommunityService.shared.activeCommunityConfigSnapshot.resolvedDefaultRiver
              ?? "Unknown"
     }
     return name
@@ -182,7 +182,7 @@ nonisolated final class UploadFarmedReports {
     // from UploadCatchReport.Config to avoid the cross-actor read here.
     let device = UploadCatchReport.Config.defaultDeviceDescription
 
-    let communityId = CommunityService.shared.activeCommunityId
+    let communityId = CommunityService.shared.activeCommunityIdSnapshot
 
     let dtos: [NoCatchReportDTO] = withGPS.map { report in
       let river = Self.resolveRiverName(lat: report.lat!, lon: report.lon!)

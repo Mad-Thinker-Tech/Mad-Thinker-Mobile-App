@@ -94,7 +94,7 @@ struct CommunityInfo: Codable, Identifiable {
 /// Named link configured per community. Up to 5 entries; backend validates
 /// non-empty name (≤100 chars) and url (≤2048 chars). Replaces the legacy
 /// single `learn_url` field — see api-reference.md.
-struct CustomURL: Codable, Equatable, Hashable, Identifiable {
+nonisolated struct CustomURL: Codable, Equatable, Hashable, Identifiable, Sendable {
     let name: String
     let url: String
 
@@ -116,7 +116,7 @@ struct CommunityTypeInfo: Codable, Identifiable {
 
 // MARK: - Community geography (JSONB from communities.geography)
 
-struct CommunityGeography: Codable, Equatable {
+nonisolated struct CommunityGeography: Codable, Equatable, Sendable {
     let defaultRiver: String?
     let lodgeRivers: [String]?
     let defaultWaterBody: String?

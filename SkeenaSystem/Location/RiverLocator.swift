@@ -14,7 +14,7 @@ import CoreLocation
 /// Note: `coordinates` is a "spine" of points along the river.
 /// We'll treat the river's coverage as the union of circles
 /// around each of these points, with radius `maxDistanceKm`.
-struct RiverDefinition {
+nonisolated struct RiverDefinition: Sendable {
   let name: String
   let communityID: String
   let coordinates: [CLLocationCoordinate2D]
@@ -38,23 +38,33 @@ struct RiverDefinition {
 /// - `RiverCoordinates.swift` is a cumulative atlas (add rivers, never remove)
 /// - `LODGE_RIVERS` in xcconfig controls which rivers are active per community
 /// - No code changes needed in this file when onboarding a new community
-final class RiverLocator {
+/// `nonisolated` so the upload pipeline (which runs off MainActor) can call
+/// `riverName(near:)` synchronously. Reads `CommunityService` via the
+/// `*Snapshot` accessors, which are backed by a Sendable `CurrentValueSubject`.
+nonisolated final class RiverLocator: @unchecked Sendable {
 
-  nonisolated static let shared = RiverLocator()
+  static let shared = RiverLocator()
 
   // MARK: - Dataset (built dynamically from atlas + active community config)
 
-  /// Cached rivers for the current community. Rebuilt when the community changes.
-  private var _cachedRivers: [RiverDefinition] = []
-  private var _cachedCommunityName: String = ""
+  /// Cached rivers for the current community. Rebuilt when the community
+  /// changes (keyed off `activeCommunityIdSnapshot`).
+  /// `nonisolated(unsafe)` because the only writer is the lazy getter below;
+  /// upload code is the only off-main caller and serializes its requests.
+  nonisolated(unsafe) private var _cachedRivers: [RiverDefinition] = []
+  nonisolated(unsafe) private var _cachedCommunityId: String = ""
 
   private var rivers: [RiverDefinition] {
-    let communityName = CommunityService.shared.activeCommunityName
-    if communityName == _cachedCommunityName, !_cachedRivers.isEmpty {
+    // Cache key: active community id. Switching communities invalidates
+    // the cached rivers automatically. Empty id means no community is
+    // selected — return empty so callers see "no match" rather than
+    // stale cached rivers from a previous community.
+    let communityId = CommunityService.shared.activeCommunityIdSnapshot ?? ""
+    if communityId == _cachedCommunityId, !_cachedRivers.isEmpty {
       return _cachedRivers
     }
-    _cachedCommunityName = communityName
-    let configuredRivers = CommunityService.shared.activeCommunityConfig.resolvedLodgeRivers
+    _cachedCommunityId = communityId
+    let configuredRivers = CommunityService.shared.activeCommunityConfigSnapshot.resolvedLodgeRivers
     _cachedRivers = configuredRivers.compactMap { riverName in
       let coords = RiverAtlas.all[riverName]
         ?? RiverAtlas.all[riverName + " River"]
@@ -66,12 +76,12 @@ final class RiverLocator {
         // name the atlas doesn't know about. Without this log, mismatches
         // like "Klamath River (California)" vs "Klamath River" cause
         // river resolution to silently return nil with no trace.
-        AppLogging.log("[RiverLocator] No atlas entry for configured river '\(riverName)' (community=\(communityName))", level: .warn, category: .catch)
+        AppLogging.log("[RiverLocator] No atlas entry for configured river '\(riverName)' (communityId=\(communityId))", level: .warn, category: .catch)
         return nil
       }
       return RiverDefinition(
         name: riverName,
-        communityID: communityName,
+        communityID: communityId,
         coordinates: coords,
         maxDistanceKm: RiverAtlas.defaultMaxDistanceKm
       )

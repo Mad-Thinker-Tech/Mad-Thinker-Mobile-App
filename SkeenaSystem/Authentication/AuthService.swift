@@ -38,7 +38,17 @@ final class AuthService: ObservableObject {
   @Published private(set) var currentUserType: UserType? // <- role for routing
   @Published private(set) var currentFirstName: String?
   @Published private(set) var currentLastName: String?
-  @Published private(set) var currentMemberId: String?
+  @Published private(set) var currentMemberId: String? {
+    didSet { _currentMemberIdSubject.send(currentMemberId) }
+  }
+
+  /// Nonisolated publisher mirror of `currentMemberId`. Used by upload-side
+  /// stores (CatchReportStore, FarmedReportStore) that subscribe from
+  /// nonisolated init code. CurrentValueSubject emits the current value on
+  /// subscribe, so first-emission semantics are identical to `$currentMemberId`.
+  nonisolated private let _currentMemberIdSubject = CurrentValueSubject<String?, Never>(nil)
+  nonisolated var currentMemberIdPublisher: AnyPublisher<String?, Never> { _currentMemberIdSubject.eraseToAnyPublisher() }
+  nonisolated var currentMemberIdSnapshot: String? { _currentMemberIdSubject.value }
 
   /// Called by CommunityService when the active community (and thus role) changes.
   /// This keeps views that read `auth.currentUserType` working without modification.

@@ -11,7 +11,7 @@ import CoreLocation
 
 /// Central atlas of river GPS spine data keyed by full river name (e.g. "Nehalem River").
 /// RiverLocator reads from this atlas, filtered by the community's `lodgeRivers` config.
-enum RiverAtlas {
+nonisolated enum RiverAtlas {
 
     /// Master dictionary: key = full river name (must match LODGE_RIVERS in xcconfig),
     /// value = ordered array of spine coordinates from mouth → headwaters.

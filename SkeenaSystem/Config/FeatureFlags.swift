@@ -6,7 +6,7 @@
 
 import Foundation
 
-func readEntitlement(_ key: String) -> Bool {
+nonisolated func readEntitlement(_ key: String) -> Bool {
   if let value = Bundle.main.object(forInfoDictionaryKey: key) {
     if let boolValue = value as? Bool { return boolValue }
     if let stringValue = value as? String { return (stringValue as NSString).boolValue }

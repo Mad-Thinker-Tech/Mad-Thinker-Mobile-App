@@ -11,7 +11,7 @@ public enum ObservationStatus: String, Codable, CaseIterable {
 
 // MARK: - Model
 
-public struct Observation: Identifiable, Codable, Equatable {
+public nonisolated struct Observation: Identifiable, Codable, Equatable, Sendable {
   // Identity
   public let id: UUID          // Local SwiftUI / filename ID
   public let clientId: UUID    // Server idempotency key

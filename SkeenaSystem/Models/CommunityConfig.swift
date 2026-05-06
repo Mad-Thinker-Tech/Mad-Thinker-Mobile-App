@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct CommunityConfig: Codable, Equatable {
+nonisolated struct CommunityConfig: Codable, Equatable, Sendable {
 
     // MARK: - Branding (from communities table)
 

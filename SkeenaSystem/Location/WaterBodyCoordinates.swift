@@ -14,7 +14,7 @@ import CoreLocation
 
 /// Central atlas of water body polygon data keyed by name (e.g. "Puget Sound").
 /// WaterBodyLocator reads from this atlas, filtered by the community's config.
-enum WaterBodyAtlas {
+nonisolated enum WaterBodyAtlas {
 
     /// Recommended check order: more specific/smaller areas first, then larger.
     /// This prevents a point in Hood Canal from matching "Puget Sound" first.

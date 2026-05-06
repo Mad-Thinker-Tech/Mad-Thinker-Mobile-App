@@ -13,7 +13,7 @@ import Foundation
 import CoreLocation
 
 /// A water body definition with its geofence polygon.
-struct WaterBodyDefinition {
+nonisolated struct WaterBodyDefinition: Sendable {
     let name: String
     let polygon: [CLLocationCoordinate2D]
 }
@@ -23,14 +23,17 @@ struct WaterBodyDefinition {
 /// The dataset is built dynamically from `WaterBodyAtlas.all`, filtered to only
 /// include water bodies listed in `AppEnvironment.shared.lodgeWaterBodies`.
 /// Check order follows `WaterBodyAtlas.checkOrder` (most specific first).
-final class WaterBodyLocator {
+/// `nonisolated` so the upload pipeline can call `waterBodyName(at:)`
+/// synchronously. Reads `CommunityService` via `activeCommunityConfigSnapshot`,
+/// which is backed by a Sendable `CurrentValueSubject`.
+nonisolated final class WaterBodyLocator: @unchecked Sendable {
 
-    nonisolated static let shared = WaterBodyLocator()
+    static let shared = WaterBodyLocator()
 
     /// Water bodies active for the current community, ordered by specificity.
     /// Recomputed each access so it reacts to community switches.
     private var waterBodies: [WaterBodyDefinition] {
-        let configured = Set(CommunityService.shared.activeCommunityConfig.resolvedLodgeWaterBodies)
+        let configured = Set(CommunityService.shared.activeCommunityConfigSnapshot.resolvedLodgeWaterBodies)
 
         var bodies: [WaterBodyDefinition] = []
 
@@ -43,7 +46,7 @@ final class WaterBodyLocator {
         }
 
         // Add any configured bodies not in checkOrder (append at end)
-        for name in CommunityService.shared.activeCommunityConfig.resolvedLodgeWaterBodies {
+        for name in CommunityService.shared.activeCommunityConfigSnapshot.resolvedLodgeWaterBodies {
             guard !bodies.contains(where: { $0.name == name }),
                   let polygon = WaterBodyAtlas.all[name],
                   polygon.count >= 3 else { continue }

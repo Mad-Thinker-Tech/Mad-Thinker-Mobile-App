@@ -16,11 +16,26 @@ final class CommunityService: ObservableObject {
     // MARK: - Published state
 
     @Published private(set) var memberships: [CommunityMembership] = []
-    @Published var activeCommunityId: String?
+    @Published var activeCommunityId: String? {
+        didSet { _activeCommunityIdSubject.send(activeCommunityId) }
+    }
     @Published private(set) var activeRole: String?  // "guide", "angler", or "public"
     @Published private(set) var activeCommunityTypeId: String?
     @Published private(set) var activeCommunityTypeName: String?
-    @Published private(set) var activeCommunityConfig: CommunityConfig = .default
+    @Published private(set) var activeCommunityConfig: CommunityConfig = .default {
+        didSet { _activeCommunityConfigSubject.send(activeCommunityConfig) }
+    }
+
+    // Nonisolated mirrors of the @Published values above. Used by upload code
+    // and the locators (RiverLocator, WaterBodyLocator), which run off
+    // MainActor for the iOS 26.2 deinit-crash mitigation. CurrentValueSubject
+    // is Sendable; reads from any thread observe a coherent snapshot of
+    // whatever value the @Published last published.
+    nonisolated private let _activeCommunityIdSubject = CurrentValueSubject<String?, Never>(nil)
+    nonisolated private let _activeCommunityConfigSubject = CurrentValueSubject<CommunityConfig, Never>(.default)
+    nonisolated var activeCommunityIdSnapshot: String? { _activeCommunityIdSubject.value }
+    nonisolated var activeCommunityConfigSnapshot: CommunityConfig { _activeCommunityConfigSubject.value }
+    nonisolated var activeCommunityIdPublisher: AnyPublisher<String?, Never> { _activeCommunityIdSubject.eraseToAnyPublisher() }
     /// The user's chosen default community. Survives logout so subsequent logins
     /// auto-select this community and skip the picker. Cleared only when the user
     /// explicitly changes it or is no longer a member.

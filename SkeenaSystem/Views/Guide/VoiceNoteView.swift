@@ -10,8 +10,8 @@ import SwiftUI
 // MARK: - Debug (OFF by default)
 
 // =====================================================
-private let DEBUG_NOTES_LOGGING = false
-@inline(__always) private func VLog(_ msg: @autoclosure () -> String) {
+nonisolated private let DEBUG_NOTES_LOGGING = false
+@inline(__always) private nonisolated func VLog(_ msg: @autoclosure () -> String) {
   if DEBUG_NOTES_LOGGING { print("🧭 VoiceNote | \(msg())") }
 }
 
@@ -21,7 +21,7 @@ private let DEBUG_NOTES_LOGGING = false
 // =====================================================
 enum VoiceNoteStatus: String, Codable { case savedPendingUpload, uploaded }
 
-struct LocalVoiceNote: Identifiable, Codable, Equatable {
+nonisolated struct LocalVoiceNote: Identifiable, Codable, Equatable, Sendable {
   let id: UUID
   var createdAt: Date
   var durationSec: Double?
@@ -43,11 +43,26 @@ struct LocalVoiceNote: Identifiable, Codable, Equatable {
 // MARK: - Storage
 
 // =====================================================
-final class VoiceNoteStore: ObservableObject {
-  nonisolated static let shared = VoiceNoteStore()
-  @Published private(set) var notes: [LocalVoiceNote] = []
+/// `nonisolated` so the upload pipeline can read voice-note metadata
+/// synchronously. All mutations write through `setNotesOnMain`. See
+/// `CatchReportStore` for the full pattern rationale.
+nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
+  static let shared = VoiceNoteStore()
 
-  private let fm = FileManager.default
+  // See `CatchReportStore` for why we drive the publisher manually instead
+  // of using `@Published` (property wrappers don't combine with `nonisolated`).
+  private let _notes = CurrentValueSubject<[LocalVoiceNote], Never>([])
+  private(set) var notes: [LocalVoiceNote] {
+    get { _notes.value }
+    set {
+      objectWillChange.send()
+      _notes.send(newValue)
+    }
+  }
+  var notesPublisher: AnyPublisher<[LocalVoiceNote], Never> { _notes.eraseToAnyPublisher() }
+
+  // FileManager isn't formally Sendable but `.default` is safe to share.
+  nonisolated(unsafe) private let fm = FileManager.default
   private let notesDirName = "VoiceNotes"
   private var notesDirURL: URL {
     fm.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -83,10 +98,20 @@ final class VoiceNoteStore: ObservableObject {
           try? fm.moveItem(at: url, to: bad)
         }
       }
-      notes = loaded.sorted(by: { $0.createdAt > $1.createdAt })
+      setNotesOnMain(loaded.sorted(by: { $0.createdAt > $1.createdAt }))
       VLog("Loaded \(notes.count) notes from disk")
     } catch {
       VLog("ERROR listing notes dir: \(error.localizedDescription)")
+    }
+  }
+
+  /// Set `notes` on the main thread. Mirrors `CatchReportStore.setReportsOnMain`
+  /// — runs synchronously when already on main to avoid async ordering races.
+  private func setNotesOnMain(_ newValue: [LocalVoiceNote]) {
+    if Thread.isMainThread {
+      self.notes = newValue
+    } else {
+      DispatchQueue.main.async { self.notes = newValue }
     }
   }
 

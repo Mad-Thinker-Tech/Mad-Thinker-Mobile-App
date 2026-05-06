@@ -105,8 +105,8 @@ nonisolated final class CatchReportStore: ObservableObject, @unchecked Sendable 
       // with the current cached values, so a signed-in user's scope is bound
       // before any view reads `reports`.
       Publishers.CombineLatest(
-        AuthService.shared.$currentMemberId,
-        CommunityService.shared.$activeCommunityId
+        AuthService.shared.currentMemberIdPublisher,
+        CommunityService.shared.activeCommunityIdPublisher
       )
       .receive(on: DispatchQueue.main)
       .sink { [weak self] member, community in

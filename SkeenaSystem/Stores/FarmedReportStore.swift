@@ -78,8 +78,8 @@ nonisolated final class FarmedReportStore: ObservableObject, @unchecked Sendable
 
     if autoRebind {
       Publishers.CombineLatest(
-        AuthService.shared.$currentMemberId,
-        CommunityService.shared.$activeCommunityId
+        AuthService.shared.currentMemberIdPublisher,
+        CommunityService.shared.activeCommunityIdPublisher
       )
       .receive(on: DispatchQueue.main)
       .sink { [weak self] member, community in

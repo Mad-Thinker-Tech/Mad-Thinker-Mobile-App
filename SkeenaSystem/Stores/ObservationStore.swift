@@ -3,10 +3,24 @@
 import Combine
 import Foundation
 
-final class ObservationStore: ObservableObject {
-  nonisolated static let shared = ObservationStore()
+/// `nonisolated` so the upload coordinator (which runs off MainActor for the
+/// iOS 26.2 deinit-crash mitigation) can call `markUploaded` synchronously.
+/// All mutations route through `setObservationsOnMain`, which dispatches to
+/// the main thread before touching `objectWillChange` / the subject.
+nonisolated final class ObservationStore: ObservableObject, @unchecked Sendable {
+  static let shared = ObservationStore()
 
-  @Published private(set) var observations: [Observation] = []
+  // See `CatchReportStore` for the rationale — `@Published` doesn't compose
+  // with the class-level `nonisolated`. Drive the publisher manually instead.
+  private let _observations = CurrentValueSubject<[Observation], Never>([])
+  private(set) var observations: [Observation] {
+    get { _observations.value }
+    set {
+      objectWillChange.send()
+      _observations.send(newValue)
+    }
+  }
+  var observationsPublisher: AnyPublisher<[Observation], Never> { _observations.eraseToAnyPublisher() }
 
   /// Count of observations still waiting to be uploaded.
   var pendingCount: Int {
@@ -103,7 +117,7 @@ final class ObservationStore: ObservableObject {
   private func loadAll() {
     ensureDirectory()
     guard let files = try? fm.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil) else {
-      DispatchQueue.main.async { self.observations = [] }
+      setObservationsOnMain([])
       return
     }
 
@@ -121,8 +135,16 @@ final class ObservationStore: ObservableObject {
 
     loaded.sort { $0.createdAt > $1.createdAt }
 
-    DispatchQueue.main.async {
-      self.observations = loaded
+    setObservationsOnMain(loaded)
+  }
+
+  /// Set `observations` on the main thread. Runs synchronously when already
+  /// on main to avoid async ordering races; mirrors `CatchReportStore`.
+  private func setObservationsOnMain(_ newValue: [Observation]) {
+    if Thread.isMainThread {
+      self.observations = newValue
+    } else {
+      DispatchQueue.main.async { self.observations = newValue }
     }
   }
 }
