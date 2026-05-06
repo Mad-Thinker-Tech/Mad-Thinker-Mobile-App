@@ -9,7 +9,7 @@ import LocalAuthentication
 // Uses AppLogging for centralized logging
 
 final class AuthService: ObservableObject {
-    static var shared: AuthService = AuthService()
+    nonisolated(unsafe) static var shared: AuthService = AuthService()
 
      #if DEBUG
      /// Test helper: reset the shared singleton to a fresh instance.

@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum DateFormatting {
+nonisolated enum DateFormatting {
 
   // MARK: - ISO 8601 (parsing API timestamps)
 

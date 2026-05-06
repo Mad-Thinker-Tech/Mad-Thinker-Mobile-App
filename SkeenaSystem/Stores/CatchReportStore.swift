@@ -25,7 +25,7 @@ import Foundation
 /// of `@Published var reports` already dispatch onto the main queue explicitly,
 /// so nonisolated is the semantically correct choice too. See
 /// `SkeenaSystem/Managers/UploadObservations.swift` for the same pattern.
-nonisolated final class CatchReportStore: ObservableObject {
+nonisolated final class CatchReportStore: ObservableObject, @unchecked Sendable {
   static let shared = CatchReportStore()
 
   // `@Published` is incompatible with the class-level `nonisolated` (which is

@@ -40,7 +40,7 @@ struct RiverDefinition {
 /// - No code changes needed in this file when onboarding a new community
 final class RiverLocator {
 
-  static let shared = RiverLocator()
+  nonisolated static let shared = RiverLocator()
 
   // MARK: - Dataset (built dynamically from atlas + active community config)
 

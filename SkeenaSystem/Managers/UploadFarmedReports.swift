@@ -178,7 +178,9 @@ nonisolated final class UploadFarmedReports {
     let isoFormatter = DateFormatting.iso8601
 
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-    let device = "\(UIDevice.current.model) \(UIDevice.current.systemVersion)"
+    // UIDevice.current is MainActor-isolated by Apple; use the cached snapshot
+    // from UploadCatchReport.Config to avoid the cross-actor read here.
+    let device = UploadCatchReport.Config.defaultDeviceDescription
 
     let communityId = CommunityService.shared.activeCommunityId
 

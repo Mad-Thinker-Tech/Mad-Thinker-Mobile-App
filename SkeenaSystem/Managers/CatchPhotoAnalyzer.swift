@@ -941,7 +941,7 @@ final class CatchPhotoAnalyzer {
 
   /// The 26 features in exact order matching the Python FEATURE_COLS.
   /// This order is critical — a mismatch produces silently wrong predictions.
-  static let featureCols: [String] = [
+  nonisolated static let featureCols: [String] = [
     // Base features (19)
     "fish_box_width",
     "fish_box_height",

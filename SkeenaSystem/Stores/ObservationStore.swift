@@ -4,7 +4,7 @@ import Combine
 import Foundation
 
 final class ObservationStore: ObservableObject {
-  static let shared = ObservationStore()
+  nonisolated static let shared = ObservationStore()
 
   @Published private(set) var observations: [Observation] = []
 

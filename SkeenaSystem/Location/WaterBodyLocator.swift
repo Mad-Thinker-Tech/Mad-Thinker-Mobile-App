@@ -25,7 +25,7 @@ struct WaterBodyDefinition {
 /// Check order follows `WaterBodyAtlas.checkOrder` (most specific first).
 final class WaterBodyLocator {
 
-    static let shared = WaterBodyLocator()
+    nonisolated static let shared = WaterBodyLocator()
 
     /// Water bodies active for the current community, ordered by specificity.
     /// Recomputed each access so it reacts to community switches.

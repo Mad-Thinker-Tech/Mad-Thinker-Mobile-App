@@ -8,7 +8,7 @@ import UIKit
 // `swift_task_deinitOnExecutorMainActorBackDeploy` path on iOS 26.2 sim.
 // The class has no stored properties that require main-thread access.
 
-nonisolated final class UploadCatchReport {
+nonisolated final class UploadCatchReport: Sendable {
 
   // Reusable encoder/decoder — avoids re-creating per upload call.
   private static let sharedEncoder: JSONEncoder = {
@@ -32,10 +32,19 @@ nonisolated final class UploadCatchReport {
     let timeout: TimeInterval
     let apiKey: String
 
+    /// Default `deviceDescription` snapshot. Reads `UIDevice.current` once via
+    /// `MainActor.assumeIsolated` (Apple keeps `UIDevice.current` MainActor-isolated)
+    /// and caches the string for the rest of the process lifetime. Callers can
+    /// still override per-construction. (`String` is Sendable, so the `static let`
+    /// itself doesn't need an isolation annotation.)
+    static let defaultDeviceDescription: String = MainActor.assumeIsolated {
+      "\(UIDevice.current.model) \(UIDevice.current.systemVersion)"
+    }
+
     init(
       endpoint: URL,
       appVersion: String,
-      deviceDescription: String = "\(UIDevice.current.model) \(UIDevice.current.systemVersion)",
+      deviceDescription: String = Config.defaultDeviceDescription,
       platform: String = "iOS",
       timeout: TimeInterval = 30,
       apiKey: String

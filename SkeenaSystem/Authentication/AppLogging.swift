@@ -28,13 +28,16 @@ public enum LogCategory: String, CaseIterable, Hashable {
   case research = "research"       // Researcher role workflows & catch confirmation
 }
 
-public struct AppLogging {
-  // Global master switch
-  public static var enabled: Bool = true
+public nonisolated struct AppLogging {
+  // Global master switch.
+  // nonisolated(unsafe) — set at boot, mutated only by tests; the unsynchronized
+  // window is acceptable for a logging toggle (a torn read at worst skips one
+  // log line). Same goes for `enabledCategories` and `minimumLevel` below.
+  public nonisolated(unsafe) static var enabled: Bool = true
 
   // Per-category switches. Resolved from Info.plist "LOG_CATEGORIES" (comma-separated
   // category names, e.g. "ml,catch,angler"). Empty/missing = all categories enabled.
-  public static var enabledCategories: Set<LogCategory> = resolveCategoriesFromInfoPlist()
+  public nonisolated(unsafe) static var enabledCategories: Set<LogCategory> = resolveCategoriesFromInfoPlist()
 
   // Resolve minimum log level from Info.plist keys: prefers "LOG_LEVEL", falls back to "Log Level".
   private static func resolveMinimumLevelFromInfoPlist() -> LogLevel {
@@ -71,7 +74,7 @@ public struct AppLogging {
     return parseCategories(raw)
   }
 
-  public static var minimumLevel: LogLevel = resolveMinimumLevelFromInfoPlist()
+  public nonisolated(unsafe) static var minimumLevel: LogLevel = resolveMinimumLevelFromInfoPlist()
 
   // Subsystem should be your bundle identifier; fallback to a generic string if not available
   private static let subsystem: String = {

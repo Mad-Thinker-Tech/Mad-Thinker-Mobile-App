@@ -18,7 +18,7 @@ public enum SplashVideoFrequency: String {
     case session = "SESSION"
 }
 
-public final class AppEnvironment {
+public nonisolated final class AppEnvironment {
     public static let shared = AppEnvironment()
 
     // MARK: - Runtime override properties (optional)

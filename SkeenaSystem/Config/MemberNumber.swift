@@ -9,7 +9,7 @@
 
 import Foundation
 
-enum MemberNumber {
+nonisolated enum MemberNumber {
 
     // MARK: - Crockford Base32 normalization
 

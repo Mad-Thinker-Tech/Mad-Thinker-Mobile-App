@@ -4,11 +4,17 @@ import Foundation
 
 /// Thin cache for the Supabase user access JWT so sync code (like your uploader)
 /// can read it without `await`. Refresh it *before* uploads.
-final class AuthStore {
+///
+/// `nonisolated` so the upload pipeline (which runs off MainActor) can read
+/// `jwt` synchronously. `cachedJWT` is `nonisolated(unsafe)` because the
+/// only mutator is `refreshFromSupabase` which already runs on MainActor —
+/// the unsynchronized read window during a refresh is acceptable (worst
+/// case: an upload retries with a stale token and gets a 401).
+nonisolated final class AuthStore {
   static let shared = AuthStore()
   private init() {}
 
-  private var cachedJWT: String?
+  nonisolated(unsafe) private var cachedJWT: String?
 
   /// Synchronous accessor used by other components (e.g., UploadCatchReportAPI).
   var jwt: String? { cachedJWT }

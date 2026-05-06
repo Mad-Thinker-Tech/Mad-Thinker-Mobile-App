@@ -11,7 +11,7 @@ import Foundation
 import Combine
 
 final class CommunityService: ObservableObject {
-    static let shared = CommunityService()
+    nonisolated static let shared = CommunityService()
 
     // MARK: - Published state
 

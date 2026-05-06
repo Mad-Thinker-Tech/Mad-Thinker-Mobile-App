@@ -44,7 +44,7 @@ struct LocalVoiceNote: Identifiable, Codable, Equatable {
 
 // =====================================================
 final class VoiceNoteStore: ObservableObject {
-  static let shared = VoiceNoteStore()
+  nonisolated static let shared = VoiceNoteStore()
   @Published private(set) var notes: [LocalVoiceNote] = []
 
   private let fm = FileManager.default

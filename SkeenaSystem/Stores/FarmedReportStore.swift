@@ -21,7 +21,7 @@ import Foundation
 /// Explicitly `nonisolated` for the same reason as `CatchReportStore` —
 /// avoiding the iOS 26.2 simruntime `swift_task_deinitOnExecutorMainActorBackDeploy`
 /// double-free when deinit hops to MainActor. See `UploadObservations.swift`.
-nonisolated final class FarmedReportStore: ObservableObject {
+nonisolated final class FarmedReportStore: ObservableObject, @unchecked Sendable {
   static let shared = FarmedReportStore()
 
   // See `CatchReportStore` for why we drive the publisher manually instead
