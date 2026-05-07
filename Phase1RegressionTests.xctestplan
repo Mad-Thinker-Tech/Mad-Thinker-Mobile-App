@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "D4E5F6A7-0004-0004-0004-000000000004",
+      "name" : "Phase 1 Regression Tests",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "RESEARCHER_FLOW_EMAIL",
+            "value" : "geoff@madthinkerfishtech.com"
+          },
+          {
+            "key" : "RESEARCHER_FLOW_PASSWORD",
+            "value" : "Fatbikesk123"
+          }
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true,
+    "defaultTestExecutionTimeAllowance" : 360
+  },
+  "testTargets" : [
+    {
+      "selectedTests" : [
+        "ResearcherUserFlowTests"
+      ],
+      "target" : {
+        "containerPath" : "container:SkeenaSystem.xcodeproj",
+        "identifier" : "FD6A18CE2F18487A0067DBFD",
+        "name" : "SkeenaSystemUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
