@@ -120,6 +120,7 @@ struct ResearcherCatchConfirmationView: View {
                     .background(Color.brandAccent, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("catchConfirmationConfirmButton")
               }
             }
           }
@@ -143,6 +144,7 @@ struct ResearcherCatchConfirmationView: View {
       }
       .alert("Catch Report Saved", isPresented: $showSavedConfirmation) {
         Button("OK") { onConfirm() }
+          .accessibilityIdentifier("catchSavedAlertOKButton")
       } message: {
         Text("Your catch report has been saved locally. When you have service, please upload for processing.")
       }

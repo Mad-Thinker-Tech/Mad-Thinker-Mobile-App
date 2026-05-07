@@ -28,6 +28,7 @@ struct CommunityToolbarButton: View {
             .foregroundColor(.brandTextPrimary)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("communityToolbarButton_\(communityService.activeCommunityName)")
         .sheet(isPresented: $showSwitcher) {
             CommunitySwitcherSheet()
                 .preferredColorScheme(.dark)
@@ -40,6 +41,7 @@ struct CommunityToolbarButton: View {
 /// A minimal community switcher button that shows only a dropdown chevron.
 /// Used when the community name is already visible elsewhere on the page.
 struct CommunitySwitcherChevron: View {
+    @StateObject private var communityService = CommunityService.shared
     @State private var showSwitcher = false
 
     var body: some View {
@@ -55,6 +57,7 @@ struct CommunitySwitcherChevron: View {
             .foregroundColor(.brandTextPrimary)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("communityToolbarButton_\(communityService.activeCommunityName)")
         .sheet(isPresented: $showSwitcher) {
             CommunitySwitcherSheet()
                 .preferredColorScheme(.dark)
@@ -108,6 +111,7 @@ struct CommunitySwitcherSheet: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("communitySwitcherRow_\(membership.communities.name)")
                         }
 
                         // Update default community (only relevant with multiple communities)

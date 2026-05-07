@@ -23,11 +23,20 @@ struct SkeenaSystemApp: App {
           let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix("publicWelcome_") }
           keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
         }
+        // Wipes every locally-saved record (catch reports, farmed reports,
+        // observations) plus their on-disk photos, so the next test sees an
+        // empty Activities list. Runs synchronously at init() before any
+        // store reads from disk — the JSON files are gone before
+        // `loadAll()` would have a chance to populate `@Published reports`.
+        if CommandLine.arguments.contains("-resetSavedLocallyReportsForUITests") {
+          Self.clearSavedLocallyRecords()
+        }
         // In UI-testing mode, listen for a Darwin notification that the test runner
         // can post to trigger sign-out without going through the SwiftUI toolbar button
         // (NavigationStack ToolbarItems report {-1,-1} hit points to XCUITest).
         if CommandLine.arguments.contains("-uiTesting") {
           Self.registerUITestSignOutHook()
+          Self.registerUITestSwitchCommunityHook()
         }
         AppLogging.log("Environment project URL: \(AppEnvironment.shared.projectURL)", level: .info, category: .auth)
         AppLogging.log("Log level: \(AppEnvironment.shared.logLevel)", level: .info, category: .auth)
@@ -46,6 +55,55 @@ struct SkeenaSystemApp: App {
           nil,
           .deliverImmediately
         )
+      }
+
+      /// Toggles between the user's two memberships when the test runner posts
+      /// `com.madthinker.uitest.toggleCommunity`. This sidesteps the SwiftUI
+      /// toolbar `CommunityToolbarButton`, which can't be tapped reliably from
+      /// XCUITest in iOS 26 simulators.
+      private static func registerUITestSwitchCommunityHook() {
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        CFNotificationCenterAddObserver(
+          center,
+          nil,
+          { _, _, _, _, _ in
+            Task { @MainActor in
+              let svc = CommunityService.shared
+              let current = svc.activeCommunityId
+              if let next = svc.memberships.first(where: { $0.communityId != current }) {
+                svc.setActiveCommunity(id: next.communityId)
+              }
+            }
+          },
+          "com.madthinker.uitest.toggleCommunity" as CFString,
+          nil,
+          .deliverImmediately
+        )
+      }
+
+      /// Removes the four on-disk roots that hold per-user records visible
+      /// in Activities, plus their associated photos. Stores re-check disk
+      /// on next bind and find empty directories, so `@Published reports`
+      /// arrays come up empty.
+      ///
+      /// We delete the *directories themselves* (not just `.savedLocally`
+      /// rows) because uploaded rows accumulate too across test runs and
+      /// the user wants a clean Activities list, not a partial one. The
+      /// directories are recreated lazily by each store's
+      /// `ensureRootDirectory()` on the next save.
+      private static func clearSavedLocallyRecords() {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let roots = [
+          "CatchReportsPicMemo",  // CatchReportStore
+          "FarmedReports",        // FarmedReportStore (no-catch marks)
+          "Observations",         // ObservationStore
+          "CatchPhotos",          // PhotoStore (catch + head photos)
+        ]
+        for name in roots {
+          let url = docs.appendingPathComponent(name, isDirectory: true)
+          try? fm.removeItem(at: url)
+        }
       }
 
       private static func clearAuthKeychainEntries() {

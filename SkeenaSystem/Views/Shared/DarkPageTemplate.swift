@@ -225,6 +225,7 @@ struct AppHeader: View {
           .foregroundColor(.brandTextPrimary)
           .multilineTextAlignment(.center)
           .padding(.top, 8)
+          .accessibilityIdentifier("communityHeaderName")
       }
 
       if let tag = config.tagline, !tag.isEmpty {

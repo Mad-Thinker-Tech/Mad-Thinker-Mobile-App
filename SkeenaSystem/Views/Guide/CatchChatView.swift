@@ -68,6 +68,7 @@ struct CatchChatView: View {
         .disabled(!hasInteracted)
         .padding(.trailing, 8)
         .padding(.vertical, 4)
+        .accessibilityIdentifier("chatResetButton")
       }
 
       // Messages + inline capture options
@@ -135,6 +136,14 @@ struct CatchChatView: View {
     .background(Color.clear)
     .onChange(of: showSourceActionSheet) { presented in
       AppLogging.log("ShowSourceActionSheet changed: \(presented)", level: .debug, category: .angler)
+      // UI-test bypass: instead of presenting the system photo source dialog
+      // (and then PHPickerViewController, which XCUITest cannot drive), load
+      // a fixture image from a path passed via launch environment and feed it
+      // straight to the view model. The picker sheet is never presented.
+      if presented, Self.isUITestingPhotoBypassEnabled {
+        injectUITestFixturePhoto()
+        showSourceActionSheet = false
+      }
     }
     // Modern photo source dialog
     .confirmationDialog(
@@ -238,6 +247,7 @@ struct CatchChatView: View {
         .background(Color.brandSurface)
         .cornerRadius(16)
         .foregroundColor(.brandTextPrimary)
+        .accessibilityIdentifier("chatInputField")
 
       Button(action: {
         viewModel.sendCurrentInput()
@@ -259,6 +269,7 @@ struct CatchChatView: View {
           .trimmingCharacters(in: .whitespacesAndNewlines)
           .isEmpty
       )
+      .accessibilityIdentifier("chatSendButton")
     }
     .padding(.top, 6)
     .padding(.horizontal, 4)
@@ -401,6 +412,7 @@ struct CatchChatView: View {
           .font(isFinalSummary ? .largeTitle : .title2)
           .foregroundColor(isFinalSummary ? .green : .white)
       }
+      .accessibilityIdentifier(isFinalSummary ? "researcherFinalConfirmButton" : "researcherStepConfirmButton")
     }
   }
 
@@ -408,6 +420,35 @@ struct CatchChatView: View {
     #if canImport(UIKit)
     UIApplication.shared.endEditing(true)
     #endif
+  }
+
+  // MARK: - UI test photo bypass
+
+  /// True when the test runner has launched the app with `-uiTesting` AND
+  /// supplied at least one fixture photo path via launch environment. Gates
+  /// the picker bypass so production runs are completely unaffected.
+  private static var isUITestingPhotoBypassEnabled: Bool {
+    guard CommandLine.arguments.contains("-uiTesting") else { return false }
+    let env = ProcessInfo.processInfo.environment
+    return env["UI_TEST_HEAD_IMAGE_PATH"] != nil || env["UI_TEST_BODY_IMAGE_PATH"] != nil
+  }
+
+  /// Load a fixture image from disk and route it through the same
+  /// `handlePhotoSelected` entry point the real picker uses. Picks the
+  /// head-vs-body image based on the view model's current step.
+  private func injectUITestFixturePhoto() {
+    let env = ProcessInfo.processInfo.environment
+    let key = viewModel.awaitingHeadPhoto ? "UI_TEST_HEAD_IMAGE_PATH" : "UI_TEST_BODY_IMAGE_PATH"
+    guard
+      let path = env[key],
+      let image = UIImage(contentsOfFile: path)
+    else {
+      AppLogging.log("UI-test photo bypass: missing image for \(key)", level: .warn, category: .angler)
+      return
+    }
+    let picked = PickedPhoto(image: image, exifDate: Date(), exifLocation: nil)
+    AppLogging.log("UI-test photo bypass: injected \(key) (\(Int(image.size.width))x\(Int(image.size.height)))", level: .info, category: .angler)
+    viewModel.handlePhotoSelected(picked)
   }
 
   private func scrollToBottom(proxy: ScrollViewProxy) {
@@ -469,6 +510,7 @@ struct CatchChatView: View {
                 Image(systemName: "camera.fill")
                   .font(.brandTitle2)
               }
+              .accessibilityIdentifier("chatPhotoUploadButton")
             }
 
             // Confirm / Retake for the conservation head-photo capture.
@@ -479,6 +521,7 @@ struct CatchChatView: View {
                 Image(systemName: "checkmark.circle.fill")
                   .font(.brandTitle2)
               }
+              .accessibilityIdentifier("chatHeadConfirmButton")
 
               Button {
                 viewModel.retakeHeadPhoto()
@@ -486,6 +529,7 @@ struct CatchChatView: View {
                 Image(systemName: "arrow.counterclockwise")
                   .font(.brandTitle2)
               }
+              .accessibilityIdentifier("chatHeadRetakeButton")
             }
 
             // Activity choice: catch (pencil) or observation (mic).
@@ -500,6 +544,7 @@ struct CatchChatView: View {
                     .font(.brandCaption2)
                 }
               }
+              .accessibilityIdentifier("chatChooseCatchButton")
 
               Button {
                 viewModel.chooseObservation()
@@ -511,6 +556,7 @@ struct CatchChatView: View {
                     .font(.brandCaption2)
                 }
               }
+              .accessibilityIdentifier("chatChooseObservationButton")
             }
 
             // Voice memo: Yes (opens recorder) / No (skip)
@@ -588,6 +634,7 @@ struct CatchChatView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(capsule.label)
+        .accessibilityIdentifier("chatCapsule_\(capsule.id)")
       }
     }
   }

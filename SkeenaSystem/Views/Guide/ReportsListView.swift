@@ -648,6 +648,8 @@ private struct CatchReportRow: View {
         .truncationMode(.tail)
     }
     .listRowBackground(Color.brandBackground)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("catchReportRow_\(report.id.uuidString)")
   }
 
   private var speciesText: String {
@@ -893,6 +895,7 @@ private struct CatchReportDetailView: View {
                 Text("Edit")
               }
             }
+            .accessibilityIdentifier(isEditing ? "catchDetailSaveButton" : "catchDetailEditButton")
           }
         }
       }
@@ -1251,6 +1254,7 @@ private struct CatchReportDetailView: View {
       .multilineTextAlignment(.trailing)
       .foregroundColor(.brandTextPrimary)
       .disabled(!canEdit)
+      .accessibilityIdentifier("catchDetailField_\(title)")
     }
   }
 

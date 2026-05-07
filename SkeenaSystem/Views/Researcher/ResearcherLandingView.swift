@@ -105,6 +105,7 @@ struct ResearcherLandingView: View {
                 .font(.brandTitle3.weight(.semibold))
                 .foregroundColor(.brandTextPrimary)
             }
+            .accessibilityIdentifier("manageProfileButton")
             CommunityToolbarButton()
           }
         }
