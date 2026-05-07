@@ -111,6 +111,7 @@ final class CatchPhotoAnalyzer {
   static let speciesLabels: [String] = [
       "atlantic_salmon_holding",
       "atlantic_salmon_traveler",
+      "brook_trout",
       "brown_trout",
       "chinook_salmon",
       "lingcod",
@@ -129,6 +130,7 @@ final class CatchPhotoAnalyzer {
   static let regressorBypassSpecies: Set<String> = [
       "sea_run_trout",
       "other",
+      "brook_trout",
       "brown_trout",
       "lingcod",
       "musky",

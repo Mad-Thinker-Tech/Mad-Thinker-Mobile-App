@@ -1605,6 +1605,7 @@ final class CatchChatViewModel: ObservableObject {
   /// (see the `/new-species` slash command in `.claude/commands/`).
   static let speciesDisplayNames: [String: String] = [
     "atlantic salmon": "Atlantic Salmon",
+    "brook trout": "Brook Trout",
     "brown trout": "Brown Trout",
     "chinook salmon": "Chinook Salmon",
     "lingcod": "Lingcod",
