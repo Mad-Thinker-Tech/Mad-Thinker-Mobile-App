@@ -70,6 +70,8 @@ class ResearcherCatchFlowTestBase: XCTestCase {
             fixture(folder: "AtlanticSalmon",  basename: "Atlantic Salmon"),
         "testRecordAtlanticSalmonCatchWithSamplingAppearsInActivities":
             fixture(folder: "AtlanticSalmon",  basename: "Atlantic Salmon"),
+        "testRecordBrookTroutCatchAppearsInActivities":
+            fixture(folder: "BrookTrout",      basename: "Brook"),
         // Phase 1: path-coverage tests
         "testTypeLocationWhenGPSCantMatch":
             fixture(folder: "Steelhead",       basename: "Steelhead"),

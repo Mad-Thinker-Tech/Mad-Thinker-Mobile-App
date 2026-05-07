@@ -47,6 +47,14 @@ final class ResearcherUserFlowTests: ResearcherCatchFlowTestBase {
         try runRecordCatchFlow(label: "AtlanticSalmon")
     }
 
+    /// Records a Brook Trout catch end-to-end. Mirrors the basic Steelhead +
+    /// Atlantic Salmon flows — accept all ML defaults, decline study /
+    /// sample / voice memo. Exercises the brook_trout class added to
+    /// ViTFishSpecies in commit 69102ae.
+    func testRecordBrookTroutCatchAppearsInActivities() throws {
+        try runRecordCatchFlow(label: "BrookTrout")
+    }
+
     /// Records a Steelhead catch where the user OVERRIDES every ML guess.
     func testRecordSteelheadCatchWithOverridesAppearsInActivities() throws {
         try runRecordCatchFlowWithOverrides(label: "Steelhead_Overrides")
