@@ -45,6 +45,9 @@
          <TestPlanReference
             reference = "container:UITests.xctestplan">
          </TestPlanReference>
+         <TestPlanReference
+            reference = "container:IntegrationTests.xctestplan">
+         </TestPlanReference>
       </TestPlans>
    </TestAction>
    <LaunchAction

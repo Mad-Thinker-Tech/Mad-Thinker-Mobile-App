@@ -1,0 +1,41 @@
+{
+  "configurations" : [
+    {
+      "id" : "C3D4E5F6-0003-0003-0003-000000000003",
+      "name" : "Integration Tests",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "RESEARCHER_FLOW_EMAIL",
+            "value" : "geoff@madthinkerfishtech.com"
+          },
+          {
+            "key" : "RESEARCHER_FLOW_PASSWORD",
+            "value" : "Fatbikesk123"
+          },
+          {
+            "key" : "SUPABASE_TEST_URL",
+            "value" : "https://rkbonlzjyemhypvrdriy.supabase.co"
+          }
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true,
+    "defaultTestExecutionTimeAllowance" : 600
+  },
+  "testTargets" : [
+    {
+      "selectedTests" : [
+        "ResearcherUploadIntegrationTests"
+      ],
+      "target" : {
+        "containerPath" : "container:SkeenaSystem.xcodeproj",
+        "identifier" : "FD6A18CE2F18487A0067DBFD",
+        "name" : "SkeenaSystemUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
