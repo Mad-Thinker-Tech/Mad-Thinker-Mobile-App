@@ -120,7 +120,8 @@ final class CatchPhotoAnalyzer {
       "rainbow_trout",
       "sea_run_trout",
       "steelhead_holding",
-      "steelhead_traveler"
+      "steelhead_traveler",
+      "striped_bass"
   ]
 
   // Species that aren't calibrated with the regressor — fall back to heuristic.
@@ -134,7 +135,8 @@ final class CatchPhotoAnalyzer {
       "brown_trout",
       "lingcod",
       "musky",
-      "rainbow_trout"
+      "rainbow_trout",
+      "striped_bass"
   ]
 
 
