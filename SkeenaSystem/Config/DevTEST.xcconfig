@@ -13,11 +13,11 @@
 SUPABASE_PROJECT_URL = https://rkbonlzjyemhypvrdriy.supabase.co
 API_BASE_URL = rkbonlzjyemhypvrdriy.supabase.co
 SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrYm9ubHpqeWVtaHlwdnJkcml5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTg1MDYsImV4cCI6MjA5MzQ5NDUwNn0.BYdk0jARaegjPbIf3357Yx8dRWvB9AWkIBanKgiMW7U
-LOG_LEVEL = debug
+LOG_LEVEL = error
 // Comma-separated log category allowlist. Empty = all categories.
 // Valid: auth, network, trip, ui, catch, ml, persistence, audio, angler,
 //        location, upload, weather, observation, community, map, research
-LOG_CATEGORIES = auth, community, weather
+LOG_CATEGORIES =
 BETA_RELEASE = true
 
 // ──────────────────────────────────────────────

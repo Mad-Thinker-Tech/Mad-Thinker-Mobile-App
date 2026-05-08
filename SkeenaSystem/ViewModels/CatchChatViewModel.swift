@@ -105,6 +105,13 @@ final class CatchChatViewModel: ObservableObject {
     // Latest device location (from ReportChatView)
     private var currentLocation: CLLocation?
 
+    // Photo's EXIF GPS, captured at upload time. Distinct from `currentLocation`
+    // — `currentLocation` falls back to the device's live GPS when the photo
+    // has no EXIF tag, but this property only ever holds an actual photo fix.
+    // Used for the final-analysis map thumbnail, which must reflect where the
+    // photo was taken, not where the phone happens to be sitting now.
+    private var photoExifLocation: CLLocation?
+
     // Best timestamp for the current photo (EXIF or fallback)
     private var currentPhotoDate: Date?
 
@@ -113,6 +120,10 @@ final class CatchChatViewModel: ObservableObject {
 
   // Expose location for confirmation screen (read-only)
   public var currentLocationForDisplay: CLLocation? { currentLocation }
+
+  /// Read-only access to the EXIF-only photo location. Nil when the photo
+  /// shipped without GPS metadata, even if a device fallback is available.
+  public var photoExifLocationForDisplay: CLLocation? { photoExifLocation }
 
     // Latest analysis so we can update it from user corrections
     private var currentAnalysis: CatchPhotoAnalysis?
@@ -276,6 +287,7 @@ final class CatchChatViewModel: ObservableObject {
     currentAnalysis = nil
     initialAnalysis = nil
     currentPhotoDate = nil
+    photoExifLocation = nil
     lastAnalysisAlternatives = []
     lastAnalysisSpeciesConfidence = nil
     lastAnalysisLifecycleConfidence = nil
@@ -375,6 +387,10 @@ final class CatchChatViewModel: ObservableObject {
 
       // Remember this as the current location for later (logs, catch snapshot, etc.)
       currentLocation = bestLocation
+      // Capture the photo's own EXIF GPS separately — the final-analysis map
+      // thumbnail only renders when this is non-nil, so a device-fallback
+      // location won't drag a misleading pin into the bubble.
+      photoExifLocation = picked.exifLocation
 
       // 2. Decide which timestamp to use: EXIF first, then "now"
       let bestDate = picked.exifDate ?? Date()
@@ -650,7 +666,7 @@ final class CatchChatViewModel: ObservableObject {
       primary = "GPS: \(gps)"
       secondary = "Type the fishery below, or tap Skip."
     } else {
-      primary = "Location not detected. Check that location services are on."
+      primary = "Location not detected. Enable Camera Location in Settings."
       secondary = "Enter manually (e.g. Babine River) or tap Skip."
     }
 

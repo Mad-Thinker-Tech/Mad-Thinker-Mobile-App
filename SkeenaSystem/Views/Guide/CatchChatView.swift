@@ -111,7 +111,10 @@ struct CatchChatView: View {
           }
           .padding(.horizontal, 4)
           .padding(.top, 4)
-          .padding(.bottom, 8)
+          // Extra bottom inset so the last bubble doesn't kiss the divider
+          // above the input bar — measurements/final-analysis bubbles are
+          // tall and were sometimes overlapping the separator line.
+          .padding(.bottom, 20)
         }
         .modifier(ScrollIndicatorModifier())
         .onChange(of: viewModel.messages.count) { newCount in
@@ -769,7 +772,7 @@ struct CatchChatView: View {
     } else if let text = message.text {
       // Style "Final Analysis" title in blue when it's the first line
       if !isUser && text.hasPrefix("Final Analysis") {
-        finalAnalysisBubble(text, coordinate: viewModel.currentLocationForDisplay?.coordinate)
+        finalAnalysisBubble(text, coordinate: viewModel.photoExifLocationForDisplay?.coordinate)
       } else if !isUser && text.contains("§") {
         // The "§" separator splits primary content (estimates, prompts)
         // from secondary supporting text (hints, calculation metadata).
