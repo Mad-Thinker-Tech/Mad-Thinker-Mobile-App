@@ -73,7 +73,13 @@ class ResearcherCatchFlowTestBase: XCTestCase {
         "testRecordBrookTroutCatchAppearsInActivities":
             fixture(folder: "BrookTrout",      basename: "Brook"),
         // Phase 1: path-coverage tests
+        // Atlantic Salmon photos carry no EXIF GPS — required for the
+        // "GPS can't match" path which would otherwise hit loc-confirm.
         "testTypeLocationWhenGPSCantMatch":
+            fixture(folder: "AtlanticSalmon",  basename: "Atlantic Salmon"),
+        // Steelhead body photo has EXIF GPS at 41.84, -123.19 (Klamath
+        // River CA) — required to exercise the loc-confirm path.
+        "testRecordSteelheadCatchWithLocationMatch":
             fixture(folder: "Steelhead",       basename: "Steelhead"),
         "testModifyLengthAcceptGirth":
             fixture(folder: "Steelhead",       basename: "Steelhead"),
@@ -94,8 +100,10 @@ class ResearcherCatchFlowTestBase: XCTestCase {
         "testManageProfileButtonOpensManageProfile":
             fixture(folder: "Steelhead",       basename: "Steelhead"),
         // Phase 2: integration / upload tests
+        // Atlantic Salmon (no EXIF) so the loc-skip path fires and the
+        // typed location is the only way past the location step.
         "test01_recordCatchWithTypedLocation":
-            fixture(folder: "Steelhead",       basename: "Steelhead"),
+            fixture(folder: "AtlanticSalmon",  basename: "Atlantic Salmon"),
         "test02_recordCatchWithLengthOverride":
             fixture(folder: "Steelhead",       basename: "Steelhead"),
         "test03_recordCatchWithFinalSummaryEdit":
@@ -264,17 +272,41 @@ class ResearcherCatchFlowTestBase: XCTestCase {
     // MARK: - Reusable chat-flow building blocks
 
     /// Drives the chat from activity-choice through both photo uploads,
-    /// stopping at the location step.
+    /// stopping at the location step. Polls every 0.5s for whichever
+    /// location capsule appears first — `loc-skip` (no river match) or
+    /// `loc-confirm` (river match) — so callers don't pay a 60s wait
+    /// penalty on the path that didn't show up.
     func runChatThroughLocationStep() throws {
         XCTAssertTrue(chat.tapCapsule("activity-catch", timeout: 15))
         XCTAssertTrue(chat.tap(chat.photoUploadButton))
         XCTAssertTrue(chat.tapCapsule("head-confirm", timeout: 15))
         XCTAssertTrue(chat.tap(chat.photoUploadButton))
+
         let locSkip = chat.capsule("loc-skip")
         let locConfirm = chat.capsule("loc-confirm")
-        let appeared = locSkip.waitForExistence(timeout: 60)
-            || locConfirm.waitForExistence(timeout: 5)
-        XCTAssertTrue(appeared, "ML analysis + location prompt should resolve within 60s")
+        let deadline = Date().addingTimeInterval(60)
+        while Date() < deadline {
+            if locSkip.exists || locConfirm.exists { return }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        XCTFail("Neither loc-skip nor loc-confirm appeared within 60s — ML analysis stalled?")
+    }
+
+    /// Dismiss whichever location capsule is up. Use this from scenarios
+    /// that don't care about the location specifically — they just need
+    /// to advance past the step. Returns the id of the capsule that was
+    /// tapped ("loc-skip" or "loc-confirm") for diagnostic logging.
+    @discardableResult
+    func dismissLocationStep() -> String? {
+        if chat.capsule("loc-skip").exists {
+            _ = chat.tapCapsule("loc-skip", timeout: 5)
+            return "loc-skip"
+        }
+        if chat.capsule("loc-confirm").exists {
+            _ = chat.tapCapsule("loc-confirm", timeout: 5)
+            return "loc-confirm"
+        }
+        return nil
     }
 
     /// After the location step, accept species/lifecycle/sex and tap
@@ -301,7 +333,7 @@ class ResearcherCatchFlowTestBase: XCTestCase {
     /// button or by typing edits.
     func runChatThroughFinalSummary() throws {
         try runChatThroughLocationStep()
-        _ = chat.tapCapsule("loc-skip", timeout: 60)
+        dismissLocationStep()
         try acceptSpeciesLifecycleSexAndSummary()
         XCTAssertTrue(chat.tapCapsule("measure-confirm", timeout: 30))
         _ = chat.capsule("measure-confirm").waitForNonExistence(timeout: 5)
@@ -403,7 +435,7 @@ class ResearcherCatchFlowTestBase: XCTestCase {
         dismissSavePasswordPrompt()
 
         try runChatThroughLocationStep()
-        _ = chat.tapCapsule("loc-skip", timeout: 60)
+        dismissLocationStep()
         try acceptSpeciesLifecycleSexAndSummary()
 
         guard let mlLength = chat.numericValue(inBubbleContaining: "Estimated length:", timeout: 30) else {
@@ -501,19 +533,8 @@ class ResearcherCatchFlowTestBase: XCTestCase {
         _ = try signInAndReachHomeLanding()
         dismissSavePasswordPrompt()
 
-        XCTAssertTrue(chat.tapCapsule("activity-catch", timeout: 15),
-                      "Activity-choice 'Report a Catch' capsule should appear on landing")
-        XCTAssertTrue(chat.tap(chat.photoUploadButton),
-                      "Photo upload button should appear after choosing 'Report a Catch'")
-        XCTAssertTrue(chat.tapCapsule("head-confirm", timeout: 15),
-                      "Head-confirm capsule should appear after head photo is selected")
-        XCTAssertTrue(chat.tap(chat.photoUploadButton),
-                      "Photo upload button should re-appear for the body photo")
-
-        if !chat.tapCapsule("loc-skip", timeout: 60) {
-            XCTAssertTrue(chat.tapCapsule("loc-confirm", timeout: 5),
-                          "Expected either loc-skip or loc-confirm after ML analysis")
-        }
+        try runChatThroughLocationStep()
+        dismissLocationStep()
         try acceptIdentificationAndMeasurements()
         try declineAllResearchPrompts()
         try confirmAndAssertCatchInActivities(label: label,

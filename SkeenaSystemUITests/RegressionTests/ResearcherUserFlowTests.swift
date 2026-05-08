@@ -55,6 +55,52 @@ final class ResearcherUserFlowTests: ResearcherCatchFlowTestBase {
         try runRecordCatchFlow(label: "BrookTrout")
     }
 
+    /// Records a Steelhead catch where the body photo's EXIF GPS
+    /// (41.84, -123.19) lands inside the Klamath River (California) spine
+    /// in the offline locator. Asserts the chat takes the `loc-confirm`
+    /// path (river matched), the user accepts it, and the saved row's
+    /// river text reflects the matched name. Exercises the
+    /// EXIF → river-locator → loc-confirm code path that the original
+    /// catch tests masked by passing nil exifLocation through the bypass.
+    func testRecordSteelheadCatchWithLocationMatch() throws {
+        executionTimeAllowance = 300
+        _ = try signInAndReachHomeLanding()
+        dismissSavePasswordPrompt()
+
+        try runChatThroughLocationStep()
+
+        // The whole point of this test: the EXIF-tagged body photo MUST
+        // produce a loc-confirm capsule, not loc-skip. If loc-skip
+        // appears the GPS reader is broken or the locator missed the
+        // coords — both worth a hard failure rather than a silent
+        // fallback to the typed-location path.
+        XCTAssertTrue(chat.capsule("loc-confirm").exists,
+                      "loc-confirm capsule should appear when the body photo's EXIF " +
+                      "GPS matches a known river spine; only loc-skip is visible")
+        XCTAssertFalse(chat.capsule("loc-skip").exists,
+                       "loc-skip should NOT appear for a GPS-tagged photo that lands in " +
+                       "a known river")
+
+        XCTAssertTrue(chat.tapCapsule("loc-confirm", timeout: 5))
+
+        try acceptIdentificationAndMeasurements()
+        try declineAllResearchPrompts()
+        try confirmAndAssertCatchInActivities(label: "Steelhead_LocConfirm",
+                                              expectedLength: nil,
+                                              expectedGirth: nil)
+
+        // The saved row should display the matched river name. Match by
+        // contains rather than exact equality so a future locator-data
+        // refactor (e.g. trimming the "(California)" suffix) doesn't
+        // brittle-fail the test for the wrong reason.
+        let row = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'catchReportRow_'"))
+            .firstMatch
+        let klamathPredicate = NSPredicate(format: "label CONTAINS %@", "Klamath River")
+        XCTAssertTrue(row.staticTexts.matching(klamathPredicate).count > 0,
+                      "Catch row should display the matched river ('Klamath River …')")
+    }
+
     /// Records a Steelhead catch where the user OVERRIDES every ML guess.
     func testRecordSteelheadCatchWithOverridesAppearsInActivities() throws {
         try runRecordCatchFlowWithOverrides(label: "Steelhead_Overrides")
@@ -239,18 +285,8 @@ final class ResearcherUserFlowTests: ResearcherCatchFlowTestBase {
         _ = try signInAndReachHomeLanding()
         dismissSavePasswordPrompt()
 
-        XCTAssertTrue(chat.tapCapsule("activity-catch", timeout: 15),
-                      "Activity-choice 'Report a Catch' capsule should appear")
-        XCTAssertTrue(chat.tap(chat.photoUploadButton),
-                      "Photo upload button should appear after choosing catch")
-        XCTAssertTrue(chat.tapCapsule("head-confirm", timeout: 15),
-                      "Head-confirm capsule should appear after head photo selected")
-        XCTAssertTrue(chat.tap(chat.photoUploadButton),
-                      "Photo upload button should re-appear for body photo")
-        if !chat.tapCapsule("loc-skip", timeout: 60) {
-            XCTAssertTrue(chat.tapCapsule("loc-confirm", timeout: 5),
-                          "Expected loc-skip or loc-confirm after ML analysis")
-        }
+        try runChatThroughLocationStep()
+        dismissLocationStep()
 
         XCTAssertTrue(chat.tapFirstCapsule(withIDPrefix: "species-", timeout: 30),
                       "Species capsules should appear after location step")
@@ -298,13 +334,8 @@ final class ResearcherUserFlowTests: ResearcherCatchFlowTestBase {
         _ = try signInAndReachHomeLanding()
         dismissSavePasswordPrompt()
 
-        XCTAssertTrue(chat.tapCapsule("activity-catch", timeout: 15))
-        XCTAssertTrue(chat.tap(chat.photoUploadButton))
-        XCTAssertTrue(chat.tapCapsule("head-confirm", timeout: 15))
-        XCTAssertTrue(chat.tap(chat.photoUploadButton))
-        if !chat.tapCapsule("loc-skip", timeout: 60) {
-            XCTAssertTrue(chat.tapCapsule("loc-confirm", timeout: 5))
-        }
+        try runChatThroughLocationStep()
+        dismissLocationStep()
         XCTAssertTrue(chat.tapFirstCapsule(withIDPrefix: "species-", timeout: 30))
         _ = chat.tapFirstCapsule(withIDPrefix: "lc-", timeout: 8)
         XCTAssertTrue(chat.tapFirstCapsule(withIDPrefix: "sex-", timeout: 30))

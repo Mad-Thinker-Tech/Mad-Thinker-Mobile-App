@@ -1,5 +1,7 @@
 // Bend Fly Shop
 
+import CoreLocation
+import ImageIO
 import SwiftUI
 
 struct CatchChatView: View {
@@ -436,6 +438,11 @@ struct CatchChatView: View {
   /// Load a fixture image from disk and route it through the same
   /// `handlePhotoSelected` entry point the real picker uses. Picks the
   /// head-vs-body image based on the view model's current step.
+  ///
+  /// Reads EXIF GPS from the file via ImageIO so the river-locator code
+  /// path actually exercises when the fixture carries coordinates. Without
+  /// this, every UI-test catch would hit the loc-skip branch — masking the
+  /// loc-confirm / river-match path.
   private func injectUITestFixturePhoto() {
     let env = ProcessInfo.processInfo.environment
     let key = viewModel.awaitingHeadPhoto ? "UI_TEST_HEAD_IMAGE_PATH" : "UI_TEST_BODY_IMAGE_PATH"
@@ -446,9 +453,37 @@ struct CatchChatView: View {
       AppLogging.log("UI-test photo bypass: missing image for \(key)", level: .warn, category: .angler)
       return
     }
-    let picked = PickedPhoto(image: image, exifDate: Date(), exifLocation: nil)
-    AppLogging.log("UI-test photo bypass: injected \(key) (\(Int(image.size.width))x\(Int(image.size.height)))", level: .info, category: .angler)
+    let exifLocation = Self.readEXIFLocation(fromFileAt: path)
+    let picked = PickedPhoto(image: image, exifDate: Date(), exifLocation: exifLocation)
+    let gpsTag = exifLocation.map { String(format: "%.4f,%.4f", $0.coordinate.latitude, $0.coordinate.longitude) } ?? "no-gps"
+    AppLogging.log("UI-test photo bypass: injected \(key) (\(Int(image.size.width))x\(Int(image.size.height)), \(gpsTag))",
+                   level: .info, category: .angler)
     viewModel.handlePhotoSelected(picked)
+  }
+
+  /// Pulls GPS lat/long out of a JPEG/HEIC's EXIF block. `UIImage` strips
+  /// metadata, so we open the file fresh via `CGImageSource` and read the
+  /// `kCGImagePropertyGPSDictionary` directly. Returns nil if either the
+  /// file has no GPS block or one of the four expected keys (latitude,
+  /// longitude, and the N/S + E/W reference letters) is missing.
+  private static func readEXIFLocation(fromFileAt path: String) -> CLLocation? {
+    let url = URL(fileURLWithPath: path)
+    guard
+      let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+      let gps = properties[kCGImagePropertyGPSDictionary as String] as? [String: Any],
+      let lat = gps[kCGImagePropertyGPSLatitude as String] as? Double,
+      let lon = gps[kCGImagePropertyGPSLongitude as String] as? Double
+    else {
+      return nil
+    }
+    // EXIF stores magnitudes as positive numbers and uses a separate "Ref"
+    // letter to indicate the hemisphere ("S" or "W" → negate).
+    let latRef = (gps[kCGImagePropertyGPSLatitudeRef as String] as? String) ?? "N"
+    let lonRef = (gps[kCGImagePropertyGPSLongitudeRef as String] as? String) ?? "E"
+    let signedLat = (latRef.uppercased() == "S") ? -lat : lat
+    let signedLon = (lonRef.uppercased() == "W") ? -lon : lon
+    return CLLocation(latitude: signedLat, longitude: signedLon)
   }
 
   private func scrollToBottom(proxy: ScrollViewProxy) {
