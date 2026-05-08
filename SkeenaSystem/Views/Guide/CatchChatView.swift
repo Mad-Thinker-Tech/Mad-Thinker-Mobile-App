@@ -2,6 +2,7 @@
 
 import CoreLocation
 import ImageIO
+import MapboxMaps
 import SwiftUI
 
 struct CatchChatView: View {
@@ -768,7 +769,7 @@ struct CatchChatView: View {
     } else if let text = message.text {
       // Style "Final Analysis" title in blue when it's the first line
       if !isUser && text.hasPrefix("Final Analysis") {
-        finalAnalysisBubble(text)
+        finalAnalysisBubble(text, coordinate: viewModel.currentLocationForDisplay?.coordinate)
       } else if !isUser && text.contains("§") {
         // The "§" separator splits primary content (estimates, prompts)
         // from secondary supporting text (hints, calculation metadata).
@@ -811,7 +812,9 @@ struct CatchChatView: View {
 
   /// Renders the final analysis bubble with a blue title line.
   /// In researcher mode, text after "§" is rendered as smaller grey supporting text.
-  private func finalAnalysisBubble(_ text: String) -> some View {
+  /// When `coordinate` is non-nil, a small location-pin map sits between the
+  /// title and the body — omitted entirely when no GPS is available.
+  private func finalAnalysisBubble(_ text: String, coordinate: CLLocationCoordinate2D?) -> some View {
     let sections = text.components(separatedBy: "\n§\n")
     let mainSection = sections.first ?? text
     let supporting = sections.count > 1 ? sections.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines) : nil
@@ -820,10 +823,13 @@ struct CatchChatView: View {
     let title = lines.first ?? ""
     let body = lines.dropFirst().joined(separator: "\n")
 
-    return VStack(alignment: .leading, spacing: 4) {
+    return VStack(alignment: .leading, spacing: 6) {
       Text(title)
         .font(.brandSubheadline.weight(.semibold))
         .foregroundColor(.brandAccent)
+      if let coordinate, CLLocationCoordinate2DIsValid(coordinate) {
+        FinalAnalysisMapThumbnail(coordinate: coordinate)
+      }
       if !body.isEmpty {
         Text(predictionStyledText(body))
           .font(.brandSubheadline)
@@ -871,6 +877,63 @@ struct CatchChatView: View {
       result += AttributedString(String(remaining))
     }
     return result
+  }
+}
+
+// MARK: - Final analysis map thumbnail
+
+/// Static-feeling Mapbox thumbnail used inside the final-analysis bubble.
+/// All gestures are disabled — this is purely visual context for the catch
+/// location, not a navigable map. Mirrors the `.outdoors` style used by the
+/// rest of the app's map surfaces for visual consistency.
+private struct FinalAnalysisMapThumbnail: View {
+  let coordinate: CLLocationCoordinate2D
+
+  /// Coordinate-bearing wrapper so `PointAnnotationGroup` can diff-by-id when
+  /// the bubble re-renders. The id is derived from the coordinate so the map
+  /// reuses the same annotation when the same catch is shown again.
+  private struct Pin: Identifiable {
+    let id: String
+    let coordinate: CLLocationCoordinate2D
+  }
+
+  private var pin: Pin {
+    Pin(
+      id: String(format: "%.6f,%.6f", coordinate.latitude, coordinate.longitude),
+      coordinate: coordinate
+    )
+  }
+
+  /// Most gesture flags default to true — flip them all off so the thumbnail
+  /// can't intercept the chat scroll.
+  private var disabledGestures: GestureOptions {
+    var opts = GestureOptions()
+    opts.panEnabled = false
+    opts.pinchEnabled = false
+    opts.rotateEnabled = false
+    opts.pinchZoomEnabled = false
+    opts.pinchPanEnabled = false
+    opts.pitchEnabled = false
+    opts.doubleTapToZoomInEnabled = false
+    opts.doubleTouchToZoomOutEnabled = false
+    opts.quickZoomEnabled = false
+    opts.simultaneousRotateAndPinchZoomEnabled = false
+    return opts
+  }
+
+  var body: some View {
+    Map(initialViewport: .camera(center: coordinate, zoom: 11, bearing: 0, pitch: 0)) {
+      PointAnnotationGroup([pin]) { p in
+        PointAnnotation(coordinate: p.coordinate)
+          .image(.init(image: MapPinImage.pin(), name: "final-analysis-pin"))
+          .iconAnchor(.bottom)
+      }
+    }
+    .mapStyle(.outdoors)
+    .gestureOptions(disabledGestures)
+    .frame(height: 140)
+    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .allowsHitTesting(false)
   }
 }
 
