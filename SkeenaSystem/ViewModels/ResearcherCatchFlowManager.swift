@@ -384,7 +384,7 @@ final class ResearcherCatchFlowManager: ObservableObject {
         scaleEnvelopeId = trimmed
         return (scaleConfirmationMessage(id: trimmed), false, true)
       }
-      return ("Please enter the scale envelope ID.", false, false)
+      return ("Please enter the scale barcode ID.", false, false)
 
     case .finScan:
       // Fin clip envelope barcode — same shape as scaleScan.
@@ -393,7 +393,7 @@ final class ResearcherCatchFlowManager: ObservableObject {
         finEnvelopeId = trimmed
         return (finConfirmationMessage(id: trimmed), false, true)
       }
-      return ("Please enter the fin clip envelope ID.", false, false)
+      return ("Please enter the fin clip barcode ID.", false, false)
 
     case .finalSummary:
       // Accept typed updates to any identification field after measurements
@@ -436,13 +436,13 @@ final class ResearcherCatchFlowManager: ObservableObject {
   /// (scanned or typed). The chat view attaches Confirm/Retry capsules to
   /// the resulting bubble.
   private func scaleConfirmationMessage(id: String) -> String {
-    "Scale envelope: \(id)\n§\nConfirm, or scan / type a corrected value."
+    "Scale barcode: \(id)\n§\nConfirm, or scan / type a corrected value."
   }
 
   /// Confirmation prompt shown after the fin clip envelope barcode is
   /// captured (scanned or typed).
   private func finConfirmationMessage(id: String) -> String {
-    "Fin clip envelope: \(id)\n§\nConfirm, or scan / type a corrected value."
+    "Fin clip barcode: \(id)\n§\nConfirm, or scan / type a corrected value."
   }
 
   /// Called by the scanner sheet after a successful scale-envelope scan.
@@ -475,9 +475,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     case .floyTagID:
       return "Let's keep it civil. Please enter the Floy Tag ID."
     case .scaleScan:
-      return "Let's keep it civil. Please enter the scale envelope ID."
+      return "Let's keep it civil. Please enter the scale barcode ID."
     case .finScan:
-      return "Let's keep it civil. Please enter the fin clip envelope ID."
+      return "Let's keep it civil. Please enter the fin clip barcode ID."
     default:
       return "Let's keep it civil. Use the buttons above, or upload a new photo."
     }
@@ -505,14 +505,14 @@ final class ResearcherCatchFlowManager: ObservableObject {
   /// scan/type prompt bubble and attaching the Scan capsule.
   func beginScaleScan() -> (message: String, nextStep: Step) {
     currentStep = .scaleScan
-    return ("Scan the scale envelope, or type the ID.", .scaleScan)
+    return ("Scan the scale barcode, or type the ID.", .scaleScan)
   }
 
   /// Called when the researcher answers Yes at the .finPrompt step.
   /// Advances to the fin-clip-envelope-scan step.
   func beginFinScan() -> (message: String, nextStep: Step) {
     currentStep = .finScan
-    return ("Scan the fin clip envelope, or type the ID.", .finScan)
+    return ("Scan the fin clip barcode, or type the ID.", .finScan)
   }
 
   // MARK: - Initial Estimate Snapshot
@@ -655,9 +655,9 @@ final class ResearcherCatchFlowManager: ObservableObject {
     // user can see the uncertainty, and offer both paths: tap-confirm accepts
     // the midpoint, or they can type the actual measured length.
     if lengthIsRangeEstimate, let rangeText = lengthRangeDisplay {
-      return "Estimated length: \(rangeText)\n§\nConfirm to accept the midpoint (\(formatLength(length))), or type the actual measured length in inches (e.g. \"19\")."
+      return "Estimated length: **\(rangeText)**\n§\nConfirm to accept the midpoint (**\(formatLength(length))**), or type the actual measured length in inches (e.g. \"19\")."
     }
-    return "Estimated length: \(formatLength(length))\n§\nConfirm, or type a new value (e.g. \"32\")."
+    return "Estimated length: **\(formatLength(length))**\n§\nConfirm, or type a new value (e.g. \"32\")."
   }
 
   private func girthPrompt() -> String {
@@ -665,8 +665,8 @@ final class ResearcherCatchFlowManager: ObservableObject {
     let girthDisplay = girthInches.map { formatGirth($0) } ?? "Unknown"
 
     var lines: [String] = []
-    lines.append("Length: \(lengthDisplay)")
-    lines.append("Estimated girth: \(girthDisplay)")
+    lines.append("Length: **\(lengthDisplay)**")
+    lines.append("Estimated girth: **\(girthDisplay)**")
 
     lines.append("§")
     if girthIsEstimated {
@@ -708,14 +708,14 @@ final class ResearcherCatchFlowManager: ObservableObject {
       lines.append("Sex: \(sx)")
     }
     if let l = lengthInches {
-      lines.append("Length: \(formatLength(l))")
+      lines.append("Length: **\(formatLength(l))**")
     }
     if let g = girthInches {
       let prefix = girthIsEstimated ? "~" : ""
-      lines.append("Girth: \(prefix)\(formatGirth(g))")
+      lines.append("Girth: **\(prefix)\(formatGirth(g))**")
     }
     if let w = weightLbs {
-      lines.append("Weight: ~\(formatWeight(w))")
+      lines.append("Weight: **~\(formatWeight(w))**")
     }
 
     // Derivation details

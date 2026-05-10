@@ -404,6 +404,18 @@ final class ResearcherRoleRegressionTests: XCTestCase {
                    "AppUserRole.researcher must be usable as an environment value for ResearcherLandingView")
   }
 
+  // MARK: - Fisheries Conditions tile
+
+  /// The researcher landing view exposes a "Fisheries Conditions" tile that
+  /// reuses the guide-side conditions flow. The per-fishery detail view's
+  /// Conditions Recall map must stay invisible for researchers — locked
+  /// here too so a future change to GuideFisheryMapView.canAccess can't
+  /// silently expose recall on the researcher path.
+  func testResearcherFisheriesConditions_excludesConditionsRecall() {
+    XCTAssertFalse(GuideFisheryMapView.canAccess(role: .researcher),
+                   "Conditions Recall must remain hidden on the researcher Fisheries Conditions flow")
+  }
+
   // MARK: - Conservation Mode label
 
   /// Researchers are *always* in conservation mode — the label is fixed,

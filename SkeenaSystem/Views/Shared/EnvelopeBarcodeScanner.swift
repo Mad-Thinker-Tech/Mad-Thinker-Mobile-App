@@ -27,7 +27,7 @@ struct EnvelopeBarcodeScanner: View {
   /// Called when the user cancels without scanning.
   let onCancel: () -> Void
 
-  @State private var statusText: String = "Hold the envelope barcode in the frame."
+  @State private var statusText: String = "Hold the barcode in the frame."
   @State private var statusIsError: Bool = false
 
   /// Strip the recognized "SMP:" prefix and return the bare ID. Falls back to
@@ -107,7 +107,7 @@ struct EnvelopeBarcodeScanner: View {
           .font(.brandHeadline)
           .foregroundColor(.brandTextPrimary)
           .multilineTextAlignment(.center)
-        Text("Tap \"Type instead\" to enter the envelope ID manually.")
+        Text("Tap \"Type instead\" to enter the barcode ID manually.")
           .font(.brandSubheadline)
           .foregroundColor(.brandTextPrimary.opacity(0.7))
           .multilineTextAlignment(.center)

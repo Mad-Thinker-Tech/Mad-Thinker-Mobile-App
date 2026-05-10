@@ -65,6 +65,33 @@ struct ResearcherLandingView: View {
           }
           .padding(.top, 12)
 
+          // ── Fisheries Conditions ─────────────────────────────────
+          // Mirrors the guide tile at GuideLandingView.swift:332. The
+          // per-fishery detail view auto-hides Conditions Recall and
+          // Tactics for non-guide roles via existing role gates.
+          Button { handleNavigateTo(.conditions) } label: {
+            HStack(spacing: 8) {
+              Image(systemName: "water.waves")
+                .font(.brandCaption)
+                .foregroundColor(.brandTextPrimary)
+              Text("Fisheries Conditions")
+                .font(.brandCaption.weight(.semibold))
+                .foregroundColor(.brandTextPrimary)
+              Spacer()
+              Image(systemName: "chevron.right")
+                .font(.brandCaption.weight(.semibold))
+                .foregroundColor(.brandTextPrimary.opacity(0.4))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.brandSurface, in: RoundedRectangle(cornerRadius: 14))
+          }
+          .buttonStyle(.plain)
+          .padding(.horizontal, 16)
+          .padding(.top, 12)
+          .padding(.bottom, 8)
+          .accessibilityIdentifier("fishingForecastTile")
+
           // ── Catch chat ───────────────────────────────────────────
           CatchChatView(viewModel: chatVM)
         }
@@ -93,7 +120,14 @@ struct ResearcherLandingView: View {
           ResearcherMapView()
             .environment(\.userRole, .researcher)
             .environment(\.guideNavigateTo, handleNavigateTo)
-        case .trips, .observations, .conditions, .learn:
+        case .conditions:
+          // Reuses the guide-side conditions list + per-fishery detail.
+          // The detail view's Conditions Recall and Tactics toolbar
+          // buttons gate on `role == .guide`, so they auto-hide here.
+          FishingForecastRequestView()
+            .environment(\.userRole, .researcher)
+            .environment(\.guideNavigateTo, handleNavigateTo)
+        case .trips, .observations, .learn:
           EmptyView()
         }
       }

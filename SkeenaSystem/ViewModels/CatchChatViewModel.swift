@@ -1080,7 +1080,7 @@ final class CatchChatViewModel: ObservableObject {
         let hadValue = flow.scaleEnvelopeId != nil
         flow.scaleEnvelopeId = nil
         if hadValue {
-          let msg = appendAssistant("Scan the scale envelope, or type the ID.")
+          let msg = appendAssistant("Scan the scale barcode, or type the ID.")
           flow.confirmAnchorID = msg.id
           attachSampleScanCapsules(to: msg.id)
         }
@@ -1088,7 +1088,7 @@ final class CatchChatViewModel: ObservableObject {
         let hadValue = flow.finEnvelopeId != nil
         flow.finEnvelopeId = nil
         if hadValue {
-          let msg = appendAssistant("Scan the fin clip envelope, or type the ID.")
+          let msg = appendAssistant("Scan the fin clip barcode, or type the ID.")
           flow.confirmAnchorID = msg.id
           attachSampleScanCapsules(to: msg.id)
         }
@@ -1827,7 +1827,7 @@ final class CatchChatViewModel: ObservableObject {
         // "20-25 inches" stay as ranges so the user can see the uncertainty.
         // The midpoint is computed separately for backend persistence via
         // `extractLengthInches`.
-        parts.append("Estimated length: \(cleanedLen)")
+        parts.append("Estimated length: **\(cleanedLen)**")
       }
     }
 
@@ -1835,11 +1835,11 @@ final class CatchChatViewModel: ObservableObject {
     if let flow = researcherFlow {
       if let g = flow.girthInches {
         let prefix = flow.girthIsEstimated ? "~" : ""
-        parts.append("Estimated girth: \(prefix)\(String(format: "%.1f inches", g))")
+        parts.append("Estimated girth: **\(prefix)\(String(format: "%.1f inches", g))**")
       }
       if let w = flow.weightLbs {
         let prefix = flow.weightIsEstimated ? "~" : ""
-        parts.append("Estimated weight: \(prefix)\(String(format: "%.1f lbs", w))")
+        parts.append("Estimated weight: **\(prefix)\(String(format: "%.1f lbs", w))**")
       }
     }
 
@@ -1877,17 +1877,17 @@ final class CatchChatViewModel: ObservableObject {
       lines.append("Lifecycle stage: \(flow.lifecycleStage ?? "-")")
       lines.append("Sex: \(flow.sex?.isEmpty == false ? flow.sex! : "-")")
       if let l = flow.lengthInches {
-        lines.append("Estimated length: \(String(format: "%.1f inches", l))")
+        lines.append("Estimated length: **\(String(format: "%.1f inches", l))**")
       } else {
         lines.append("Estimated length: -")
       }
       if let g = flow.girthInches {
         let prefix = flow.girthIsEstimated ? "~" : ""
-        lines.append("Estimated girth: \(prefix)\(String(format: "%.1f inches", g))")
+        lines.append("Estimated girth: **\(prefix)\(String(format: "%.1f inches", g))**")
       }
       if let w = flow.weightLbs {
         let prefix = flow.weightIsEstimated ? "~" : ""
-        lines.append("Estimated weight: \(prefix)\(String(format: "%.1f lbs", w))")
+        lines.append("Estimated weight: **\(prefix)\(String(format: "%.1f lbs", w))**")
       }
     } else {
       // Defensive — shouldn't happen now that every photo analysis creates a flow.

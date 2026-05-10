@@ -70,6 +70,38 @@ struct FishingForecastRequestView: View {
     return url
   }
 
+  // MARK: - Ordering
+
+  /// Orders water sources for the conditions list by metric availability,
+  /// then alphabetically (case-insensitive) within each bucket. Buckets:
+  ///   0 — both water level and water temperature available
+  ///   1 — water level only
+  ///   2 — water temperature only
+  ///   3 — neither (or no batch entry yet)
+  ///
+  /// Exposed as a `static` taking closures so the regression test can pin
+  /// the bucketing without standing up `BatchCondition` (a private type)
+  /// or the full view.
+  static func sortByConditions(
+    sources: [String],
+    hasLevel: (String) -> Bool,
+    hasTemp: (String) -> Bool
+  ) -> [String] {
+    func bucket(_ name: String) -> Int {
+      switch (hasLevel(name), hasTemp(name)) {
+      case (true, true):   return 0
+      case (true, false):  return 1
+      case (false, true):  return 2
+      case (false, false): return 3
+      }
+    }
+    return sources.sorted { lhs, rhs in
+      let (a, b) = (bucket(lhs), bucket(rhs))
+      if a != b { return a < b }
+      return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+    }
+  }
+
   // MARK: - State
 
   @State private var loadingRiver: String?
@@ -95,10 +127,19 @@ struct FishingForecastRequestView: View {
           AppHeader()
             .padding(.top, 20)
 
-          // Water body rows — rivers + water bodies, stacked vertically
+          // Water body rows — rivers + water bodies, stacked vertically.
+          // Ordered by metric availability so guides land on the most-
+          // useful fisheries first; ties break alphabetically. Pre-batch
+          // (empty `batchConditions`) every source falls into the "neither"
+          // bucket, so the list reads alphabetically until the batch
+          // arrives, then re-sorts.
           let rivers = CommunityService.shared.activeCommunityConfig.resolvedLodgeRivers
           let waterBodies = CommunityService.shared.activeCommunityConfig.resolvedLodgeWaterBodies
-          let allWaterSources = (rivers + waterBodies).sorted()
+          let allWaterSources = Self.sortByConditions(
+            sources: rivers + waterBodies,
+            hasLevel: { batchConditions[$0]?.waterLevelFt != nil },
+            hasTemp: { batchConditions[$0]?.waterTempC != nil }
+          )
 
           if allWaterSources.isEmpty {
             VStack(spacing: 12) {
@@ -188,6 +229,18 @@ struct FishingForecastRequestView: View {
     .task { fetchBatchConditions() }
     .navigationTitle("Conditions")
     .navigationBarBackButtonHidden(true)
+    .toolbar {
+      ToolbarItem(placement: .navigationBarLeading) {
+        Button {
+          dismiss()
+        } label: {
+          Image(systemName: "chevron.left")
+            .foregroundColor(.brandTextPrimary)
+        }
+        .accessibilityIdentifier("conditionsBackButton")
+        .accessibilityLabel("Back")
+      }
+    }
     .navigationDestination(isPresented: $goToResult) {
       if let res = result {
         FishingForecastResultView(result: res)

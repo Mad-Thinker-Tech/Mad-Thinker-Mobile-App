@@ -839,13 +839,13 @@ private struct CatchReportDetailView: View {
             headPhotoSection
           }
           catchInfoSection
+          dateTimeSection
           // Length is always present; girth/weight rows inside the section
           // stay conditional for historical records that pre-date Phase 3.
           measurementsSection
           if hasResearchTagData {
             researchTagsSection
           }
-          tripInfoSection
           locationSection
           voiceMemoSection
         }
@@ -930,6 +930,39 @@ private struct CatchReportDetailView: View {
       Text("Catch Info")
         .font(.brandHeadline)
         .foregroundColor(.brandTextPrimary)
+
+      // Author + identity rows lead the section so the reader sees who
+      // logged the catch before the catch attributes.
+      editableTextField(title: authorRoleLabel, text: Binding(
+        get: { report.guideName ?? "" },
+        set: { report.guideName = $0 }
+      ))
+
+      // Trip Name is guide-only — researchers and members fish solo and
+      // have no trip context.
+      if AuthService.shared.currentUserType == .guide {
+        HStack {
+          Text("Trip Name")
+            .font(.brandSubheadline)
+            .foregroundColor(.brandAccent)
+          Spacer()
+          Text(resolvedTripName())
+            .font(.brandBody)
+            .foregroundColor(.brandTextPrimary)
+        }
+      }
+
+      editableTextField(title: "Member Number", text: Binding(
+        get: { report.memberId },
+        set: { report.memberId = MemberNumber.normalize($0) }
+      ))
+
+      if CommunityService.shared.activeCommunityConfig.flag("E_MANAGE_LICENSES") {
+        editableTextField(title: "Classified Waters License", text: Binding(
+          get: { report.classifiedWatersLicenseNumber ?? "" },
+          set: { report.classifiedWatersLicenseNumber = $0 }
+        ))
+      }
 
       editableTextField(title: "Species", text: Binding(
         get: { report.species ?? "" },
@@ -1067,10 +1100,10 @@ private struct CatchReportDetailView: View {
         infoRow(label: "PIT Tag", value: pit)
       }
       if let scale = report.scaleEnvelopeId, !scale.isEmpty {
-        infoRow(label: "Scale Envelope", value: scale)
+        infoRow(label: "Scale Barcode", value: scale)
       }
       if let finClip = report.finEnvelopeId, !finClip.isEmpty {
-        infoRow(label: "Fin Clip Envelope", value: finClip)
+        infoRow(label: "Fin Clip Barcode", value: finClip)
       }
     }
     .padding()
@@ -1078,38 +1111,22 @@ private struct CatchReportDetailView: View {
     .cornerRadius(12)
   }
 
-  private var tripInfoSection: some View {
+  /// Author label for the catch row — researchers fish solo, guides have
+  /// a trip + angler context. Mirrors `CatchReportRow.authorRoleLabel` so
+  /// the row and detail views agree on the role's display name.
+  private var authorRoleLabel: String {
+    switch AuthService.shared.currentUserType {
+    case .researcher: return "Researcher"
+    case .`public`:   return "Member"
+    default:          return "Guide"
+    }
+  }
+
+  private var dateTimeSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Trip / Angler")
+      Text("Date & Time")
         .font(.brandHeadline)
         .foregroundColor(.brandTextPrimary)
-
-      HStack {
-        Text("Trip Name")
-          .font(.brandSubheadline)
-          .foregroundColor(.brandAccent)
-        Spacer()
-        Text(resolvedTripName())
-          .font(.brandBody)
-          .foregroundColor(.brandTextPrimary)
-      }
-
-      editableTextField(title: "Guide", text: Binding(
-        get: { report.guideName ?? "" },
-        set: { report.guideName = $0 }
-      ))
-
-      editableTextField(title: "Member Number", text: Binding(
-        get: { report.memberId },
-        set: { report.memberId = MemberNumber.normalize($0) }
-      ))
-
-      if CommunityService.shared.activeCommunityConfig.flag("E_MANAGE_LICENSES") {
-        editableTextField(title: "Classified Waters License", text: Binding(
-          get: { report.classifiedWatersLicenseNumber ?? "" },
-          set: { report.classifiedWatersLicenseNumber = $0 }
-        ))
-      }
 
       infoRow(
         label: "Created",
@@ -1316,55 +1333,52 @@ private struct CatchReportDetailView: View {
     dismiss()
   }
 
+  /// Resolves the human-readable trip name for the Trip Name row (guide-only).
+  /// Prefers `report.tripName` if stored, falls back to a Core Data `Trip`
+  /// fetch by `tripId`, and returns "-" when neither is available.
   private func resolvedTripName() -> String {
-    // First check if the catch report has a tripName stored directly
     if let storedName = report.tripName?.trimmingCharacters(in: .whitespacesAndNewlines),
        !storedName.isEmpty {
       return storedName
     }
 
-    // Fall back to Core Data Trip lookup using the stored tripId
     let dash = "-"
 
-    // Guard that CatchReport has a tripId property; if not, bail
     guard let any = Mirror(reflecting: report).children.first(where: { $0.label == "tripId" })?.value else {
       return dash
     }
 
-    // Extract tripId as String if possible
     let tripIdString: String
-    if let s = any as? String { tripIdString = s } else if let sOpt = any as? String? { tripIdString = sOpt ?? "" } else { return dash }
+    if let s = any as? String { tripIdString = s }
+    else if let sOpt = any as? String? { tripIdString = sOpt ?? "" }
+    else { return dash }
 
     let trimmed = tripIdString.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return dash }
 
-    // Build fetch request for Trip by tripId, supporting UUID or String storage
     let request: NSFetchRequest<Trip> = Trip.fetchRequest()
-
     if let uuid = UUID(uuidString: trimmed) {
       request.predicate = NSPredicate(format: "tripId == %@", uuid as CVarArg)
     } else {
       request.predicate = NSPredicate(format: "tripId == %@", trimmed)
     }
-
     request.fetchLimit = 1
 
     do {
-      if let trip = try context.fetch(request).first {
-        // Prefer Trip.name if present and non-empty
-        if let nameAttr = trip.entity.attributesByName["name"], nameAttr.attributeType == .stringAttributeType {
-          if let name = trip.value(forKey: "name") as? String {
-            let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty { return t }
-          }
-        }
+      if let trip = try context.fetch(request).first,
+         let nameAttr = trip.entity.attributesByName["name"],
+         nameAttr.attributeType == .stringAttributeType,
+         let name = trip.value(forKey: "name") as? String {
+        let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty { return t }
       }
     } catch {
-      // Silent fallback
+      // Silent fallback to dash.
     }
 
     return dash
   }
+
 }
 
 // MARK: - CatchReportVoiceNoteSheet

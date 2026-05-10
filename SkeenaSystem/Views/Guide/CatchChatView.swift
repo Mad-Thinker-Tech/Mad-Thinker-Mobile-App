@@ -851,7 +851,7 @@ struct CatchChatView: View {
   }
 
   /// Strips `**…**` markers from a chat message and colors the wrapped runs in
-  /// `.brandAccent` (blue) so model predictions visually pop without showing
+  /// `.brandSuccess` (green) so model predictions visually pop without showing
   /// literal asterisks. Text outside markers inherits the bubble's default
   /// `foregroundColor`. Unmatched openers are passed through verbatim so a
   /// message that happens to contain `**` doesn't get truncated.
@@ -867,7 +867,7 @@ struct CatchChatView: View {
       if let closeRange = afterOpen.range(of: "**") {
         let inner = String(afterOpen[..<closeRange.lowerBound])
         var styled = AttributedString(inner)
-        styled.foregroundColor = .brandAccent
+        styled.foregroundColor = .brandSuccess
         result += styled
         remaining = afterOpen[closeRange.upperBound...]
       } else {

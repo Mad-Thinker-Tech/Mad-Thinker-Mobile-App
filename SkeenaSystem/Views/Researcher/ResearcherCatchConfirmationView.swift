@@ -67,11 +67,11 @@ struct ResearcherCatchConfirmationView: View {
               }
 
               if isEditing {
-                editableRow(label: "Scale Envelope", text: $editScaleEnvelopeId)
-                editableRow(label: "Fin Clip Envelope", text: $editFinEnvelopeId)
+                editableRow(label: "Scale Barcode", text: $editScaleEnvelopeId)
+                editableRow(label: "Fin Clip Barcode", text: $editFinEnvelopeId)
               } else {
-                readOnlyRow(label: "Scale Envelope", value: scaleEnvelopeIdString)
-                readOnlyRow(label: "Fin Clip Envelope", value: finEnvelopeIdString)
+                readOnlyRow(label: "Scale Barcode", value: scaleEnvelopeIdString)
+                readOnlyRow(label: "Fin Clip Barcode", value: finEnvelopeIdString)
               }
 
               readOnlyRow(label: "Voice Memo", value: voiceMemoString)
