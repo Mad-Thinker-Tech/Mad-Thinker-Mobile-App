@@ -71,8 +71,10 @@ struct ObservationsListView: View {
   // MARK: - Filtering
 
   private func isArchived(_ obs: Observation) -> Bool {
-    let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date.distantPast
-    return obs.createdAt < twoWeeksAgo
+    AppEnvironment.shared.shouldArchive(
+      uploaded: obs.status == .uploaded,
+      createdAt: obs.createdAt
+    )
   }
 
   private var activeObservations: [Observation] {

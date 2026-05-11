@@ -16,6 +16,8 @@
 	<string>$(APP_DISPLAY_NAME)</string>
 	<key>APP_LOGO_ASSET</key>
 	<string>$(APP_LOGO_ASSET)</string>
+	<key>ARCHIVE_AFTER_DAYS</key>
+	<string>$(ARCHIVE_AFTER_DAYS)</string>
 	<key>BETA_RELEASE</key>
 	<string>$(BETA_RELEASE)</string>
 	<key>CATCH_STORY_URL</key>

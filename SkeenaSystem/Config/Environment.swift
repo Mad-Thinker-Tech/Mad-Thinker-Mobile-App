@@ -52,6 +52,7 @@ public nonisolated final class AppEnvironment {
     public var overrideForecastLocation: String?
     public var overrideDefaultMapLatitude: Double?
     public var overrideDefaultMapLongitude: Double?
+    public var overrideArchiveAfterDays: Int?
     public var overrideImageCompressionQuality: Double?
     public var overrideFishDetectMinConfidence: Double?
     public var overrideFishDefaultGirthRatio: Double?
@@ -449,6 +450,26 @@ public nonisolated final class AppEnvironment {
         if let v = overrideFishDefaultGirthRatio { return v }
         if let s = stringFromInfo("FISH_DEFAULT_GIRTH_RATIO"), let v = Double(s) { return v }
         return 0.5
+    }
+
+    /// Whole-day window after which an *uploaded* catch report or observation
+    /// drops out of the active list and moves to the Archive view.
+    /// Source: `ARCHIVE_AFTER_DAYS` (xcconfig → Info.plist). Defaults to 14.
+    public var archiveAfterDays: Int {
+        if let v = overrideArchiveAfterDays { return v }
+        if let s = stringFromInfo("ARCHIVE_AFTER_DAYS"), let v = Int(s) { return v }
+        return 14
+    }
+
+    /// Single source of truth for "is this record old enough to archive?".
+    /// Locally-saved / pending records are never archived regardless of age —
+    /// only uploaded records past the `archiveAfterDays` window flip true.
+    /// Both catch reports and observations call this so the rule stays
+    /// consistent across surfaces.
+    public func shouldArchive(uploaded: Bool, createdAt: Date) -> Bool {
+        guard uploaded else { return false }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -archiveAfterDays, to: Date()) ?? .distantPast
+        return createdAt < cutoff
     }
 
     /// Minimum confidence threshold for the person detection box to be used as

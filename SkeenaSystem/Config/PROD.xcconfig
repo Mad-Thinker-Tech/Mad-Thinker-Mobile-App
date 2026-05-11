@@ -18,6 +18,12 @@ LOG_LEVEL = error
 // Leave empty in prod so error logs from any subsystem are preserved.
 LOG_CATEGORIES =
 
+// Auto-archive threshold (whole days). An uploaded catch report or
+// observation older than this many days drops out of the active list
+// and moves into the Archive view. Locally-saved/pending records are
+// never archived regardless of age.
+ARCHIVE_AFTER_DAYS = 14
+
 // ──────────────────────────────────────────────
 // MARK: - Entitlements
 // ──────────────────────────────────────────────

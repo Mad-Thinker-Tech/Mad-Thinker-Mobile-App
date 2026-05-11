@@ -62,8 +62,10 @@ struct ActivitiesView: View {
 
   private var archivedCatches: [CatchReport] {
     catchStore.reports.filter {
-      $0.status == .uploaded &&
-      $0.createdAt < (Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? .distantPast)
+      AppEnvironment.shared.shouldArchive(
+        uploaded: $0.status == .uploaded,
+        createdAt: $0.createdAt
+      )
     }
   }
 

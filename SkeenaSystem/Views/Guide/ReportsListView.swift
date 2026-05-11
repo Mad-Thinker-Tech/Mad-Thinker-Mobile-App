@@ -278,9 +278,10 @@ struct ReportsListView: View {
   // MARK: - Archiving
 
   private func isArchived(_ report: CatchReport) -> Bool {
-    guard report.status == .uploaded else { return false }
-    let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date.distantPast
-    return report.createdAt < twoWeeksAgo
+    AppEnvironment.shared.shouldArchive(
+      uploaded: report.status == .uploaded,
+      createdAt: report.createdAt
+    )
   }
 
   private var activeReports: [CatchReport] {

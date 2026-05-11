@@ -12,11 +12,15 @@ final class CatchReportArchiveTests: XCTestCase {
 
   // MARK: - Helpers
 
-  /// Replicates the archive logic from ReportsListView for testability.
+  /// Calls the shared predicate so this test pins the real archive rule
+  /// rather than duplicating logic. The threshold (`archiveAfterDays`) is
+  /// xcconfig-driven, so this picks up whatever the active build config
+  /// sets — currently 14.
   private func isArchived(_ report: CatchReport) -> Bool {
-    guard report.status == .uploaded else { return false }
-    let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date.distantPast
-    return report.createdAt < twoWeeksAgo
+    AppEnvironment.shared.shouldArchive(
+      uploaded: report.status == .uploaded,
+      createdAt: report.createdAt
+    )
   }
 
   private func createReport(
@@ -170,5 +174,52 @@ final class CatchReportArchiveTests: XCTestCase {
     XCTAssertEqual(active.count, 3, "Should have 3 active reports")
     XCTAssertEqual(archived.count, 1, "Should have 1 archived report")
     XCTAssertEqual(archived.first?.status, .uploaded, "Archived report should be uploaded")
+  }
+
+  // MARK: - Configurable Archive Threshold (ARCHIVE_AFTER_DAYS)
+
+  /// The archive window is xcconfig-driven via `ARCHIVE_AFTER_DAYS`. The
+  /// helper's `overrideArchiveAfterDays` lets tests pin behavior at custom
+  /// windows without relying on the build config. Reset to nil in tearDown
+  /// so other tests pick up the xcconfig default again.
+  override func tearDown() {
+    AppEnvironment.shared.overrideArchiveAfterDays = nil
+    super.tearDown()
+  }
+
+  func testArchiveThreshold_overrideShortensWindow_flipsRecentReportToArchived() {
+    AppEnvironment.shared.overrideArchiveAfterDays = 3
+    let fourDaysAgo = Calendar.current.date(byAdding: .day, value: -4, to: Date())!
+    let report = createReport(createdAt: fourDaysAgo, status: .uploaded)
+
+    XCTAssertTrue(isArchived(report),
+                  "With a 3-day window, a 4-day-old uploaded report should archive")
+  }
+
+  func testArchiveThreshold_overrideLengthensWindow_keepsOldReportActive() {
+    AppEnvironment.shared.overrideArchiveAfterDays = 60
+    let twentyDaysAgo = Calendar.current.date(byAdding: .day, value: -20, to: Date())!
+    let report = createReport(createdAt: twentyDaysAgo, status: .uploaded)
+
+    XCTAssertFalse(isArchived(report),
+                   "With a 60-day window, a 20-day-old uploaded report should still be active")
+  }
+
+  func testArchiveThreshold_overrideZero_archivesEveryUploadedReportImmediately() {
+    AppEnvironment.shared.overrideArchiveAfterDays = 0
+    let oneSecondAgo = Date(timeIntervalSinceNow: -1)
+    let report = createReport(createdAt: oneSecondAgo, status: .uploaded)
+
+    XCTAssertTrue(isArchived(report),
+                  "With a 0-day window, any uploaded report should archive immediately")
+  }
+
+  func testArchiveThreshold_overrideZero_stillSparesUnuploadedReports() {
+    AppEnvironment.shared.overrideArchiveAfterDays = 0
+    let twoMonthsAgo = Calendar.current.date(byAdding: .day, value: -60, to: Date())!
+    let report = createReport(createdAt: twoMonthsAgo, status: .savedLocally)
+
+    XCTAssertFalse(isArchived(report),
+                   "Locally-saved reports must never archive even with a 0-day window")
   }
 }
