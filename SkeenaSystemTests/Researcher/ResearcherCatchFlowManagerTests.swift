@@ -202,14 +202,14 @@ final class ResearcherCatchFlowManagerTests: XCTestCase {
 
     let scaleMsg = flow.recordScannedScaleEnvelope(id: "A7K3F9")
     XCTAssertEqual(flow.scaleEnvelopeId, "A7K3F9")
-    XCTAssertTrue(scaleMsg.contains("Scale envelope: A7K3F9"))
+    XCTAssertTrue(scaleMsg.contains("Scale barcode: A7K3F9"))
 
     _ = flow.confirm() // → .finPrompt
     _ = flow.beginFinScan()
 
     let finClipMsg = flow.recordScannedFinEnvelope(id: "B2M8Q1")
     XCTAssertEqual(flow.finEnvelopeId, "B2M8Q1")
-    XCTAssertTrue(finClipMsg.contains("Fin clip envelope: B2M8Q1"))
+    XCTAssertTrue(finClipMsg.contains("Fin clip barcode: B2M8Q1"))
     // Scale barcode untouched by the fin-clip scan.
     XCTAssertEqual(flow.scaleEnvelopeId, "A7K3F9")
   }
