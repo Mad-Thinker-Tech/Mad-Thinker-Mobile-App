@@ -68,6 +68,11 @@ final class CommunityService: ObservableObject {
     private let kActiveCommunityConfig = "CommunityService.activeCommunityConfig"
     private let kDefaultCommunityId = "CommunityService.defaultCommunityId"
 
+    /// Per-user cached memberships list. Keyed by `<prefix>+<memberId>` so two
+    /// users on the same device don't see each other's communities. Mirrors
+    /// the per-member directory scoping used by `CatchReportStore`.
+    private static let kCachedMembershipsPrefix = "CommunityService.cachedMemberships."
+
     // MARK: - Config (lazy to avoid Info.plist crash in test targets)
 
     private var projectURL: URL { AppEnvironment.shared.projectURL }
@@ -85,6 +90,16 @@ final class CommunityService: ObservableObject {
         if let configData = UserDefaults.standard.data(forKey: kActiveCommunityConfig),
            let cached = try? JSONDecoder().decode(CommunityConfig.self, from: configData) {
             activeCommunityConfig = cached
+        }
+
+        // Restore cached memberships list keyed by the user's memberId so the
+        // community picker is populated on offline cold launch. Reads from the
+        // static AuthService cache to avoid any ordering dependency on AuthService init.
+        let cachedMemberId = AuthService.loadCachedAuthState().memberId
+        let restored = Self.loadCachedMemberships(for: cachedMemberId)
+        if !restored.isEmpty {
+            memberships = restored
+            AppLogging.log("[CommunityService] Restored \(restored.count) cached membership(s) for memberId=\(cachedMemberId ?? "<nil>")", level: .debug, category: .community)
         }
 
         if let cachedId = activeCommunityId {
@@ -127,7 +142,23 @@ final class CommunityService: ObservableObject {
 
         guard let token = await AuthService.shared.currentAccessToken() else {
             AppLogging.log("[CommunityService] No access token for membership fetch", level: .warn, category: .community)
-            await MainActor.run { self.hasFetchedMemberships = true }
+            // Offline path: signIn() restored an offline session but there's no
+            // server token to fetch with. Hydrate from the per-user cache so
+            // the picker has something to render.
+            let cachedMemberId = AuthService.shared.currentMemberIdSnapshot
+                ?? UserDefaults.standard.string(forKey: "CachedMemberId")
+            let cached = Self.loadCachedMemberships(for: cachedMemberId)
+            await MainActor.run {
+                if !cached.isEmpty {
+                    if self.memberships.isEmpty {
+                        self.memberships = cached
+                    }
+                    AppLogging.log("[CommunityService] Offline fetch: using \(cached.count) cached membership(s) for memberId=\(cachedMemberId ?? "<nil>")", level: .info, category: .community)
+                } else {
+                    AppLogging.log("[CommunityService] Offline fetch: no cached memberships available for memberId=\(cachedMemberId ?? "<nil>")", level: .warn, category: .community)
+                }
+                self.hasFetchedMemberships = true
+            }
             return
         }
 
@@ -183,6 +214,7 @@ final class CommunityService: ObservableObject {
 
             await MainActor.run {
                 self.memberships = fetched
+                self.persistMemberships(fetched)
                 AppLogging.log("[CommunityService] Fetched \(fetched.count) active membership(s) from server", level: .info, category: .community)
                 for m in fetched {
                     let typeName = m.communities.communityTypes?.name ?? "nil"
@@ -510,6 +542,40 @@ final class CommunityService: ObservableObject {
         if let configData = try? JSONEncoder().encode(activeCommunityConfig) {
             UserDefaults.standard.set(configData, forKey: kActiveCommunityConfig)
         }
+    }
+
+    /// Writes the memberships list under `<prefix><memberId>` so the picker
+    /// can be populated on offline cold launch / offline sign-in. No-op when
+    /// we don't yet know the memberId (the next successful online fetch will
+    /// retry with a known ID).
+    private func persistMemberships(_ list: [CommunityMembership]) {
+        guard let memberId = AuthService.shared.currentMemberIdSnapshot
+            ?? UserDefaults.standard.string(forKey: "CachedMemberId"),
+              !memberId.isEmpty else {
+            AppLogging.log("[CommunityService] persistMemberships skipped: no memberId available", level: .debug, category: .community)
+            return
+        }
+        let key = Self.kCachedMembershipsPrefix + memberId
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: key)
+            AppLogging.log("[CommunityService] Persisted \(list.count) membership(s) (\(data.count) bytes) for memberId=\(memberId)", level: .debug, category: .community)
+        } else {
+            AppLogging.log("[CommunityService] persistMemberships encode failed for memberId=\(memberId)", level: .warn, category: .community)
+        }
+    }
+
+    /// Pure read of the per-user cache. Returns `[]` on miss, nil memberId,
+    /// or decode failure (graceful — picker just appears empty, same as
+    /// pre-cache behavior).
+    static func loadCachedMemberships(for memberId: String?) -> [CommunityMembership] {
+        guard let memberId, !memberId.isEmpty else { return [] }
+        let key = kCachedMembershipsPrefix + memberId
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        guard let decoded = try? JSONDecoder().decode([CommunityMembership].self, from: data) else {
+            AppLogging.log("[CommunityService] Cached memberships decode failed for memberId=\(memberId) — backend schema may have shifted; cache will refresh on next online fetch", level: .debug, category: .community)
+            return []
+        }
+        return decoded
     }
 }
 
