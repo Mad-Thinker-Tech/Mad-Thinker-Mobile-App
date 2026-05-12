@@ -306,20 +306,26 @@ private struct LoadedForecastResultView: View {
   // MARK: - Tides Text Blocks
 
   private func tidesTextBlocks(tides: RiverConditionsResponse.TidesBlock) -> some View {
+    // Reorganized: the user cares first about what's coming next, so the
+    // "Next" block sits on top with both its High and its Low together.
+    // The "Previous" block follows underneath for reference. Was: "High"
+    // and "Low" groups each splitting Previous/Next.
     VStack(alignment: .leading, spacing: 8) {
       VStack(alignment: .leading, spacing: 6) {
-        Text("High").font(.brandSubheadline).bold().foregroundColor(.brandTextPrimary)
-        tideRow(title: "Previous", point: tides.previousHigh, highlight: false)
-        tideRow(title: "Next", point: tides.nextHigh, highlight: true)
+        Text("Next").font(.brandSubheadline).bold().foregroundColor(.brandTextPrimary)
+        // The upcoming high tide is the headline number for a guide — keep
+        // it highlighted in blue (matches the previous emphasis treatment).
+        tideRow(title: "High", point: tides.nextHigh, highlight: true)
+        tideRow(title: "Low", point: tides.nextLow, highlight: false)
       }
       .padding(8)
       .background(Color.brandStrokeSubtle)
       .clipShape(RoundedRectangle(cornerRadius: 10))
 
       VStack(alignment: .leading, spacing: 6) {
-        Text("Low").font(.brandSubheadline).bold().foregroundColor(.brandTextPrimary)
-        tideRow(title: "Previous", point: tides.previousLow, highlight: false)
-        tideRow(title: "Next", point: tides.nextLow, highlight: false)
+        Text("Previous").font(.brandSubheadline).bold().foregroundColor(.brandTextPrimary)
+        tideRow(title: "High", point: tides.previousHigh, highlight: false)
+        tideRow(title: "Low", point: tides.previousLow, highlight: false)
       }
       .padding(8)
       .background(Color.brandStrokeSubtle)
@@ -392,14 +398,24 @@ private struct LoadedForecastResultView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     } else {
       let last = levels.last!
+      // Y-axis bounds in display units (ft / m per community), so the
+      // labels in the leading column read in the same unit as the
+      // headline above.
+      let ysDisplay = levels.map { displayLevelFt($0.levelFt) }
+      let minY = ysDisplay.min() ?? 0
+      let maxY = ysDisplay.max() ?? 0
       VStack(alignment: .leading, spacing: 6) {
         currentConditionsHeadline(value: "\(number(displayLevelFt(last.levelFt))) \(waterLevelUnit)")
           .accessibilityIdentifier("waterLevelHeader")
 
-        WaterLevelSparkline(levels: levels)
-          .frame(height: chartHeight)
-
-        xAxisDateLabels(timestamps: levels.map(\.recordedAt))
+        HStack(alignment: .top, spacing: 4) {
+          yAxisColumn(min: minY, max: maxY)
+          VStack(spacing: 6) {
+            WaterLevelSparkline(levels: levels)
+              .frame(height: chartHeight)
+            xAxisDateLabels(timestamps: levels.map(\.recordedAt))
+          }
+        }
       }
     }
   }
@@ -408,14 +424,21 @@ private struct LoadedForecastResultView: View {
   private var waterTemperatureTabContent: some View {
     if let temps = result.waterTemperatures, !temps.isEmpty {
       let last = temps.last!
+      let ysDisplay = temps.map { displayTempC($0.tempC) }
+      let minY = ysDisplay.min() ?? 0
+      let maxY = ysDisplay.max() ?? 0
       VStack(alignment: .leading, spacing: 6) {
         currentConditionsHeadline(value: "\(number(displayTempC(last.tempC)))\(community.tempUnit)")
           .accessibilityIdentifier("waterTempHeader")
 
-        WaterTemperatureSparkline(temps: temps)
-          .frame(height: chartHeight)
-
-        xAxisDateLabels(timestamps: temps.map(\.recordedAt))
+        HStack(alignment: .top, spacing: 4) {
+          yAxisColumn(min: minY, max: maxY)
+          VStack(spacing: 6) {
+            WaterTemperatureSparkline(temps: temps)
+              .frame(height: chartHeight)
+            xAxisDateLabels(timestamps: temps.map(\.recordedAt))
+          }
+        }
       }
     } else {
       Text("Water temperature data unavailable")
@@ -434,6 +457,32 @@ private struct LoadedForecastResultView: View {
     Text("Current conditions: \(value)")
       .font(.brandCaption)
       .foregroundColor(.brandTextSecondary)
+      // Right-justify so it visually anchors to the trailing edge of
+      // the chart strip below it.
+      .frame(maxWidth: .infinity, alignment: .trailing)
+  }
+
+  /// Fixed-width Y-axis column rendered to the LEFT of the sparkline —
+  /// max value at the top, min at the bottom, no axis text. Numbers
+  /// trail-align so they sit close to the chart edge, and the column's
+  /// fixed width keeps the chart's starting x-position stable regardless
+  /// of value length. No "Max"/"Min" label text per spec — just numbers.
+  /// Same display unit as the current-conditions headline above (the call
+  /// site passes already-converted values).
+  private func yAxisColumn(min: Double, max: Double) -> some View {
+    VStack(spacing: 0) {
+      Text(number(max))
+        .font(.brandCaption2)
+        .foregroundColor(.brandTextSecondary)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+      Spacer(minLength: 0)
+      Text(number(min))
+        .font(.brandCaption2)
+        .foregroundColor(.brandTextSecondary)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    .frame(width: 42, height: chartHeight)
+    .accessibilityHidden(true)
   }
 
   /// One date label per local-TZ calendar day, centered horizontally beneath
@@ -607,6 +656,14 @@ private struct TideWaveGraph: View {
     DateFormatting.decimal2.string(from: NSNumber(value: x)) ?? "\(x)"
   }
 
+  /// Vertical space reserved at the top + bottom of the chart for the value
+  /// labels. The wave itself plots into the middle band so high-point dots
+  /// can never touch the high-label row above them, and low-point dots
+  /// can never touch the low-label row below them. Was: labels offset
+  /// relative to each dot — produced visible overlaps when a peak/trough
+  /// landed near the chart's vertical edge.
+  private let labelBand: CGFloat = 22
+
   var body: some View {
     GeometryReader { geo in
       let w = geo.size.width
@@ -617,11 +674,15 @@ private struct TideWaveGraph: View {
       let n = max(1, samples.count - 1)
       let horizontalInset: CGFloat = w * 0.07
       let usableWidth = w - (horizontalInset * 2)
+      // Plot the wave between [labelBand, h - labelBand] — reserving the
+      // top and bottom strips for value labels.
+      let waveTop = labelBand
+      let waveBottom = h - labelBand
       let pts: [CGPoint] = samples.enumerated().map { idx, s in
         let nx = CGFloat(idx) / CGFloat(n)
         let ny = (s.height - minHeight) / yRange
         let x = horizontalInset + (nx * usableWidth)
-        let y = (1 - CGFloat(ny)) * (h - 20) + 10
+        let y = (1 - CGFloat(ny)) * (waveBottom - waveTop) + waveTop
         return CGPoint(x: x, y: y)
       }
 
@@ -645,78 +706,60 @@ private struct TideWaveGraph: View {
             let p = pts[i]
             let isHigh = samples[i].isHigh
             let color: Color = isHigh ? .blue : .teal
+
+            // Connector tick from the dot toward its label band — gives the
+            // eye a hard association when the dot sits well away from the
+            // top/bottom edge (typical mid-tide samples). Drawn first so
+            // the dot draws on top.
+            let labelEdgeY: CGFloat = isHigh ? labelBand : (h - labelBand)
+            let dotEdgeY: CGFloat = isHigh ? p.y - 5 : p.y + 5
+            if abs(dotEdgeY - labelEdgeY) > 3 {
+              var line = Path()
+              line.move(to: CGPoint(x: p.x, y: dotEdgeY))
+              line.addLine(to: CGPoint(x: p.x, y: labelEdgeY))
+              context.stroke(
+                line,
+                with: .color(color.opacity(0.45)),
+                style: StrokeStyle(lineWidth: 1, dash: [2, 2])
+              )
+            }
+
             let dotRect = CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)
             context.fill(Path(ellipseIn: dotRect), with: .color(color))
             context.stroke(Path(ellipseIn: dotRect), with: .color(Color.brandScrim.opacity(0.85)), lineWidth: 1)
           }
         }
 
-        Group {
-          if !pts.isEmpty, !samples.isEmpty {
-            let p = pts[0]; let s = samples[0]
-            makeLabel(
-              text: "\(number(displayHeight(s.height))) \(heightUnit)",
-              color: s.isHigh ? .blue : .teal,
-              at: p,
-              index: 0,
-              w: w,
-              h: h,
-              isHigh: s.isHigh
-            )
-          }
-          if pts.count > 1, samples.count > 1 {
-            let p = pts[1]; let s = samples[1]
-            makeLabel(
-              text: "\(number(displayHeight(s.height))) \(heightUnit)",
-              color: s.isHigh ? .blue : .teal,
-              at: p,
-              index: 1,
-              w: w,
-              h: h,
-              isHigh: s.isHigh
-            )
-          }
-          if pts.count > 2, samples.count > 2 {
-            let p = pts[2]; let s = samples[2]
-            makeLabel(
-              text: "\(number(displayHeight(s.height))) \(heightUnit)",
-              color: s.isHigh ? .blue : .teal,
-              at: p,
-              index: 2,
-              w: w,
-              h: h,
-              isHigh: s.isHigh
-            )
-          }
-          if pts.count > 3, samples.count > 3 {
-            let p = pts[3]; let s = samples[3]
-            makeLabel(
-              text: "\(number(displayHeight(s.height))) \(heightUnit)",
-              color: s.isHigh ? .blue : .teal,
-              at: p,
-              index: 3,
-              w: w,
-              h: h,
-              isHigh: s.isHigh
-            )
-          }
+        ForEach(samples.indices, id: \.self) { i in
+          let p = pts[i]
+          let s = samples[i]
+          makeLabel(
+            text: "\(number(displayHeight(s.height))) \(heightUnit)",
+            color: s.isHigh ? .blue : .teal,
+            at: p,
+            w: w,
+            h: h,
+            isHigh: s.isHigh
+          )
         }
       }
     }
   }
 
+  /// High labels pin to the chart's top label band; low labels pin to the
+  /// bottom band. The wave is plotted between the two bands so the labels
+  /// never sit on top of the curve or the dots. Horizontal position
+  /// follows the underlying point, clamped so labels can't run off the
+  /// chart edges.
   private func makeLabel(
     text: String,
     color: Color,
     at p: CGPoint,
-    index i: Int,
     w: CGFloat,
     h: CGFloat,
     isHigh: Bool
   ) -> some View {
-    var offsetY: CGFloat = isHigh ? -18 : 18
-    if i == 1 || i == 2 { offsetY += isHigh ? -8 : 8 }
-
+    let labelCenterY: CGFloat = isHigh ? labelBand / 2 : h - labelBand / 2
     return Text(text)
       .font(.brandCaption2)
       .foregroundColor(color)
@@ -725,8 +768,8 @@ private struct TideWaveGraph: View {
       .background(Color.brandScrim.opacity(0.5))
       .clipShape(RoundedRectangle(cornerRadius: 5))
       .position(
-        x: clamp(p.x, 24, w - 24),
-        y: clamp(p.y + offsetY, 10, h - 10)
+        x: clamp(p.x, 28, w - 28),
+        y: labelCenterY
       )
   }
 
