@@ -1093,7 +1093,7 @@
 			repositoryURL = "https://github.com/supabase-community/supabase-swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
+				minimumVersion = 2.46.0;
 			};
 		};
 		FD0A00022F3A000100000001 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
