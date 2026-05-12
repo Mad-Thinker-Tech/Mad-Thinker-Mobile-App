@@ -884,17 +884,14 @@ private struct CatchReportDetailView: View {
                 isEditing = true
               }
             } label: {
-              if isEditing {
-                Text("Save")
-                  .font(.brandSubheadline.weight(.semibold))
-                  .foregroundColor(.brandTextPrimary)
-                  .padding(.horizontal, 12)
-                  .padding(.vertical, 8)
-                  .background(Color.brandAccent)
-                  .clipShape(Capsule())
-              } else {
-                Text("Edit")
-              }
+              // Both states use the same toolbar-text styling — plain text,
+              // no background, no capsule. The Save state goes bold to
+              // signal "primary action" without fighting the toolbar's
+              // own button chrome (which was producing a visible double
+              // border around the previous capsule fill).
+              Text(isEditing ? "Save" : "Edit")
+                .font(.brandSubheadline.weight(isEditing ? .semibold : .regular))
+                .foregroundColor(.brandAccent)
             }
             .accessibilityIdentifier(isEditing ? "catchDetailSaveButton" : "catchDetailEditButton")
           }
