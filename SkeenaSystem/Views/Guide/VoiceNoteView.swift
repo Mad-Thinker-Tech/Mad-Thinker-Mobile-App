@@ -244,6 +244,16 @@ final class SpeechRecorder: NSObject, ObservableObject {
   private var segmentStartTime: CFAbsoluteTime?
   private var levelTimer: Timer?
 
+  /// Text from prior recognition sessions that have already finalized. The
+  /// engine periodically emits `isFinal == true` mid-recording (especially
+  /// on-device, and most often after a brief speech pause). Per Apple, no
+  /// further results are delivered on a finalized task — so we lock that
+  /// text in here, start a fresh task, and concatenate the new session's
+  /// rolling partial onto this prefix. Previously the recorder only kept
+  /// the current task's partial, so any auto-finalize caused the visible
+  /// transcript to "reset" back to whatever the next sentence said.
+  private var finalizedTranscript: String = ""
+
   private let maxDuration: TimeInterval?
 
   let sampleRate: Double = 16000
@@ -273,33 +283,20 @@ final class SpeechRecorder: NSObject, ObservableObject {
     try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
     try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-    recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-    recognitionRequest?.shouldReportPartialResults = true
-
     let locale = Locale(identifier: languageCode)
     let recognizer = SFSpeechRecognizer(locale: locale)
     speechRecognizer = recognizer
+    onDeviceRecognition = recognizer?.supportsOnDeviceRecognition ?? false
 
-    let supportsOnDevice = recognizer?.supportsOnDeviceRecognition ?? false
-    onDeviceRecognition = supportsOnDevice
-    #if targetEnvironment(simulator)
-    recognitionRequest?.requiresOnDeviceRecognition = false
-    #else
-    recognitionRequest?.requiresOnDeviceRecognition = supportsOnDevice
-    #endif
-    recognitionRequest?.taskHint = .dictation
+    // Reset the cross-session accumulator so a new recording starts with a
+    // clean slate. partialTranscript is reset for the same reason — older
+    // sheets clear it themselves on save/cancel, but resetting here makes
+    // the recorder safe to re-use without that ceremony.
+    finalizedTranscript = ""
+    partialTranscript = ""
 
     try configureEngineTapAndStart()
-
-    recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest!) { [weak self] result, error in
-      guard let self else { return }
-      if let result {
-        DispatchQueue.main.async {
-          self.partialTranscript = result.bestTranscription.formattedString
-        }
-      }
-      if let error { VLog("Recognition error: \(error.localizedDescription)") }
-    }
+    startNewRecognitionSession()
 
     // File recorder
     audioTempURL = FileManager.default.temporaryDirectory.appendingPathComponent("note_tmp_\(UUID().uuidString).m4a")
@@ -324,10 +321,80 @@ final class SpeechRecorder: NSObject, ObservableObject {
     let format = input.inputFormat(forBus: 0)
     input.removeTap(onBus: 0)
     input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+      // The tap dereferences `self.recognitionRequest` lazily on every
+      // append, so when `startNewRecognitionSession()` swaps in a fresh
+      // request mid-recording, subsequent buffers route to the new task
+      // automatically. No need to reinstall the tap on each restart.
       self?.recognitionRequest?.append(buffer)
     }
     audioEngine.prepare()
     try audioEngine.start()
+  }
+
+  /// Tear down any in-flight recognition task/request and start a new one
+  /// so the recorder can keep transcribing across the engine's automatic
+  /// segmentation boundaries. Called from `start()` for the first session
+  /// and from the callback when the engine finalizes a task mid-recording.
+  ///
+  /// Result handling:
+  /// - In-flight partial → display = finalizedTranscript + " " + current
+  /// - `isFinal == true` → append current to `finalizedTranscript`, then
+  ///   spin up a new session (if still actively recording) so audio keeps
+  ///   flowing into a live recognizer.
+  /// - Error → if still recording, attempt one restart. Errors thrown by
+  ///   `cancel()` on the prior task during teardown reach the callback as
+  ///   noise — the `isRecording`/`isPaused` guards skip those.
+  private func startNewRecognitionSession() {
+    // Tear down any prior task/request before starting a new one. Safe to
+    // call after the prior task already finalized — `cancel()` on a
+    // finished task is a no-op.
+    recognitionRequest?.endAudio()
+    recognitionTask?.cancel()
+    recognitionTask = nil
+
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    request.shouldReportPartialResults = true
+    #if targetEnvironment(simulator)
+    request.requiresOnDeviceRecognition = false
+    #else
+    request.requiresOnDeviceRecognition = onDeviceRecognition
+    #endif
+    request.taskHint = .dictation
+    recognitionRequest = request
+
+    recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        if let result {
+          let current = result.bestTranscription.formattedString
+          let display = self.finalizedTranscript.isEmpty
+            ? current
+            : self.finalizedTranscript + " " + current
+          self.partialTranscript = display
+
+          if result.isFinal {
+            // Lock this session's text into the accumulator and start a
+            // new task so we keep transcribing the user's next sentences.
+            if !self.finalizedTranscript.isEmpty {
+              self.finalizedTranscript += " "
+            }
+            self.finalizedTranscript += current
+            if self.isRecording, !self.isPaused {
+              self.startNewRecognitionSession()
+            }
+          }
+        }
+        if let error {
+          VLog("Recognition error: \(error.localizedDescription)")
+          // Errors during normal stop()/cancel() teardown also arrive
+          // here — the recording-state guard skips them. If we're still
+          // recording, attempt one restart to keep the session alive.
+          if self.isRecording, !self.isPaused {
+            self.startNewRecognitionSession()
+          }
+        }
+      }
+    }
   }
 
   private func startMeterTimer() {
