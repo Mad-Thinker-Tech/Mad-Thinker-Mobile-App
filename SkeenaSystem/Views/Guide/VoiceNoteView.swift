@@ -252,7 +252,20 @@ final class SpeechRecorder: NSObject, ObservableObject {
   /// rolling partial onto this prefix. Previously the recorder only kept
   /// the current task's partial, so any auto-finalize caused the visible
   /// transcript to "reset" back to whatever the next sentence said.
+  ///
+  /// Also written by `pause()` (snapshots `partialTranscript`) so a
+  /// resumed session has the pre-pause text to concatenate onto, even when
+  /// iOS hadn't silence-finalized yet.
   private var finalizedTranscript: String = ""
+
+  /// Monotonically incremented every time a recognition session is started
+  /// or torn down. Each task's result closure captures the generation in
+  /// effect at task creation; a mismatch on the next callback means the
+  /// task has been superseded (by `startNewRecognitionSession()`, `pause()`,
+  /// or `stop()`) and any late results should be dropped. Prevents a
+  /// cancelled task from delivering one last `bestTranscription` and
+  /// double-appending or overwriting the accumulator after pause.
+  private var sessionGeneration: Int = 0
 
   private let maxDuration: TimeInterval?
 
@@ -352,6 +365,9 @@ final class SpeechRecorder: NSObject, ObservableObject {
     recognitionTask?.cancel()
     recognitionTask = nil
 
+    sessionGeneration += 1
+    let myGeneration = sessionGeneration
+
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
     #if targetEnvironment(simulator)
@@ -364,7 +380,7 @@ final class SpeechRecorder: NSObject, ObservableObject {
 
     recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
       DispatchQueue.main.async {
-        guard let self else { return }
+        guard let self, self.sessionGeneration == myGeneration else { return }
         if let result {
           let current = result.bestTranscription.formattedString
           let display = self.finalizedTranscript.isEmpty
@@ -424,6 +440,25 @@ final class SpeechRecorder: NSObject, ObservableObject {
 
   func pause() {
     guard isRecording, !isPaused else { return }
+
+    // Lock the visible transcript into the accumulator BEFORE tearing down
+    // recognition. Without this, a fast resume spins up a fresh session
+    // whose first partial recomputes `partialTranscript` as
+    // `finalizedTranscript + " " + currentNewAudio`. If iOS hadn't yet
+    // silence-finalized the prior task, `finalizedTranscript` would still
+    // be empty and the pre-pause text would vanish from the display.
+    finalizedTranscript = partialTranscript
+
+    // Cleanly end the in-flight recognition session and bump the generation
+    // so any late callback the cancelled task may still deliver (cancel() +
+    // endAudio() can race a final result onto the main queue) is dropped —
+    // otherwise it would re-append the current-session text we just rolled
+    // into the accumulator.
+    recognitionRequest?.endAudio()
+    recognitionTask?.cancel()
+    recognitionTask = nil
+    sessionGeneration += 1
+
     if let start = segmentStartTime { accumulatedDuration += CFAbsoluteTimeGetCurrent() - start }
     segmentStartTime = nil
     audioEngine.inputNode.removeTap(onBus: 0)
@@ -441,6 +476,11 @@ final class SpeechRecorder: NSObject, ObservableObject {
       segmentStartTime = CFAbsoluteTimeGetCurrent()
       startMeterTimer()
       isPaused = false
+      // Spin up a fresh recognition session so the resumed audio engine's
+      // buffers route into a live recognizer. The prior task was torn down
+      // in pause(); without this, the tap would append to a nil / finalized
+      // request and no further transcription would happen.
+      startNewRecognitionSession()
     } catch { VLog("Resume error: \(error.localizedDescription)") }
   }
 
@@ -453,6 +493,7 @@ final class SpeechRecorder: NSObject, ObservableObject {
     recognitionRequest?.endAudio()
     recognitionTask?.cancel()
     recognitionTask = nil
+    sessionGeneration += 1
     audioRecorder?.stop()
     stopMeterTimer()
     isRecording = false
