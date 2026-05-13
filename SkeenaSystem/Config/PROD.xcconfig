@@ -69,10 +69,10 @@ OPS_TICKETS_URL = /functions/v1/ops-tickets
 // MARK: - App Branding
 // ──────────────────────────────────────────────
 
-APP_DISPLAY_NAME = Bend Fly Shop
+APP_DISPLAY_NAME = Mad Thinker
 APP_LOGO_ASSET = AppLogo
-COMMUNITY = Bend Fly Shop
-COMMUNITY_TAGLINE = Your Fly Fishing Destination
+COMMUNITY = Mad Thinker
+COMMUNITY_TAGLINE = Intelligent Conservation
 
 // ──────────────────────────────────────────────
 // MARK: - Location & Geography
@@ -92,7 +92,10 @@ DEFAULT_MAP_LONGITUDE = -122.3321
 // MARK: - Maps
 // ──────────────────────────────────────────────
 
-MAPBOX_ACCESS_TOKEN = YOUR_MAPBOX_TOKEN_HERE
+// Mapbox token loaded from Secrets.xcconfig (gitignored).
+// Create SkeenaSystem/Config/Secrets.xcconfig with:
+//   MAPBOX_ACCESS_TOKEN = pk.your_token_here
+#include? "Secrets.xcconfig"
 
 // ──────────────────────────────────────────────
 // MARK: - Splash Video

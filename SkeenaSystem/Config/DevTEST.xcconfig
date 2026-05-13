@@ -8,12 +8,11 @@
 // ──────────────────────────────────────────────
 // MARK: - Backend & Authentication
 // ──────────────────────────────────────────────
-
 // Updated to new Supabase backend - MT-Stage
 SUPABASE_PROJECT_URL = https://tkvokrhmehtfirnserwt.supabase.co
 API_BASE_URL = tkvokrhmehtfirnserwt.supabase.co
 SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrdm9rcmhtZWh0ZmlybnNlcnd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjEzODQsImV4cCI6MjA5MzU5NzM4NH0.W09bTXH-ZFJFNKrCdPP1sSQqpdIyceQ8wOJS9h8dX48
-LOG_LEVEL = debug
+LOG_LEVEL = error
 // Comma-separated log category allowlist. Empty = all categories.
 // Valid: auth, network, trip, ui, catch, ml, persistence, audio, angler,
 //        location, upload, weather, observation, community, map, research
@@ -77,10 +76,10 @@ FLIGHT_STATUS = /functions/v1/flight-status
 // MARK: - App Branding (compile-time fallback — overridden by communities table at runtime)
 // ──────────────────────────────────────────────
 
-APP_DISPLAY_NAME = Epic Waters
+APP_DISPLAY_NAME = Mad Thinker
 APP_LOGO_ASSET = AppLogo
-COMMUNITY = Epic Waters
-COMMUNITY_TAGLINE =
+COMMUNITY = Mad Thinker
+COMMUNITY_TAGLINE = Intelligent Conservation
 
 // ──────────────────────────────────────────────
 // MARK: - Location & Geography (compile-time fallback — overridden by communities.geography at runtime)
