@@ -112,6 +112,8 @@
 	<string>$(OPS_TICKETS_URL)</string>
 	<key>PROFICIENCY_URL</key>
 	<string>$(PROFICIENCY_URL)</string>
+	<key>PUBLIC_ON</key>
+	<string>$(PUBLIC_ON)</string>
 	<key>RIVER_CONDITIONS_URL</key>
 	<string>$(RIVER_CONDITIONS_URL)</string>
 	<key>SPECIES_DETECTION_THRESHOLD</key>

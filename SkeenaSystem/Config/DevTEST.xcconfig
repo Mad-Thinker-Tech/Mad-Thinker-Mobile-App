@@ -38,6 +38,13 @@ E_PREFERENCES = true
 E_CATCH_CAROUSEL = true
 E_CATCH_MAP = true
 
+// Registration flow gate.
+// true  -> "Create one" shows the choice screen ("Do you have a community code?")
+//          so users can register either with an invite or as a fully public sign-up.
+// false -> "Create one" routes straight to the invite-required form (community
+//          code + member number are mandatory). Use for closed deployments.
+PUBLIC_ON = false
+
 // ──────────────────────────────────────────────
 // MARK: - API Endpoints (Edge Functions)
 // ──────────────────────────────────────────────
