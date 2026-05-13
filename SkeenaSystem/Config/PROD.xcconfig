@@ -92,7 +92,7 @@ DEFAULT_WATER_BODY = Puget Sound
 LODGE_WATER_BODIES = Hood Canal,Puget Sound
 TACTICS_ENABLED = NO
 FORECAST_LOCATION = Oregon Coast
-FORECAST_NOTES = Data sourced from USGS. Kilchis River data is approximated from the Wilson River station due to the absence of a dedicated gauge.
+FORECAST_NOTES = Water height and temperature data sourced from USGS, WSC, and NOAA as available. Tide data provided by NOAAs CO-OPS Tides & Currents API
 DEFAULT_MAP_LATITUDE = 47.6062
 DEFAULT_MAP_LONGITUDE = -122.3321
 
