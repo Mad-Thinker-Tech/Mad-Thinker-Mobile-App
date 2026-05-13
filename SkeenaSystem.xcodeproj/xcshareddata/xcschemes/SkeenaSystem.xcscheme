@@ -37,15 +37,18 @@
             reference = "container:UnitTests.xctestplan">
          </TestPlanReference>
          <TestPlanReference
+            reference = "container:PostLoginTests.xctestplan">
+         </TestPlanReference>
+         <TestPlanReference
             reference = "container:RegressionTests.xctestplan">
          </TestPlanReference>
          <TestPlanReference
-            reference = "container:IntegrationTests.xctestplan">
+            reference = "container:UITests.xctestplan">
          </TestPlanReference>
       </TestPlans>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "DevTEST"
+      buildConfiguration = "PROD"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
@@ -86,7 +89,7 @@
       buildConfiguration = "PROD">
    </AnalyzeAction>
    <ArchiveAction
-      buildConfiguration = "DevTEST"
+      buildConfiguration = "PROD"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>
