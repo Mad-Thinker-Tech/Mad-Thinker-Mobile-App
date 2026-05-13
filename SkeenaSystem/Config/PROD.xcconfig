@@ -9,10 +9,11 @@
 // ──────────────────────────────────────────────
 // MARK: - Backend & Authentication
 // ──────────────────────────────────────────────
-
-SUPABASE_PROJECT_URL = https://koyegehcwcrvxpfthkxq.supabase.co
-API_BASE_URL = koyegehcwcrvxpfthkxq.supabase.co
-SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtveWVnZWhjd2NydnhwZnRoa3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjE3MzMsImV4cCI6MjA4OTMzNzczM30.XVjI2BRX0-XdHQFK_Vas2jc7zZN32DCXRVKtnsbQQGk
+// This is PRODUCTION DATABSE - this is Prod.Xconfig 
+//
+SUPABASE_PROJECT_URL = https://koxeklkffxewmkasocvk.supabase.co
+API_BASE_URL = koxeklkffxewmkasocvk.supabase.co
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtveGVrbGtmZnhld21rYXNvY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjIzNzUsImV4cCI6MjA5MzU5ODM3NX0.z7Ujrm9N2n6sIaEbzPeygJksZAKgabkmchNY34Q5uZ4
 LOG_LEVEL = error
 // Comma-separated log category allowlist. Empty = all categories enabled.
 // Leave empty in prod so error logs from any subsystem are preserved.
