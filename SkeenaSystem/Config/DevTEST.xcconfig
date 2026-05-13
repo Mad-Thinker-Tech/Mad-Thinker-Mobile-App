@@ -9,10 +9,10 @@
 // MARK: - Backend & Authentication
 // ──────────────────────────────────────────────
 
-// Updated to new Supabase backend - MT-Dev
-SUPABASE_PROJECT_URL = https://rkbonlzjyemhypvrdriy.supabase.co
-API_BASE_URL = rkbonlzjyemhypvrdriy.supabase.co
-SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrYm9ubHpqeWVtaHlwdnJkcml5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTg1MDYsImV4cCI6MjA5MzQ5NDUwNn0.BYdk0jARaegjPbIf3357Yx8dRWvB9AWkIBanKgiMW7U
+// Updated to new Supabase backend - MT-Stage
+SUPABASE_PROJECT_URL = https://tkvokrhmehtfirnserwt.supabase.co
+API_BASE_URL = tkvokrhmehtfirnserwt.supabase.co
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrdm9rcmhtZWh0ZmlybnNlcnd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMjEzODQsImV4cCI6MjA5MzU5NzM4NH0.W09bTXH-ZFJFNKrCdPP1sSQqpdIyceQ8wOJS9h8dX48
 LOG_LEVEL = debug
 // Comma-separated log category allowlist. Empty = all categories.
 // Valid: auth, network, trip, ui, catch, ml, persistence, audio, angler,
