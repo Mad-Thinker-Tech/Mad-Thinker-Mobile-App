@@ -18,7 +18,30 @@ struct MemberRegistrationView: View {
   // MARK: - Registration path
 
   /// nil = choice screen, true = invite path, false = full registration
+  ///
+  /// Seeded by `init()` based on the `PUBLIC_ON` build-time flag: when
+  /// `PUBLIC_ON` is true the user starts on the choice screen; when it's
+  /// false we skip the choice screen entirely and land on the invite path
+  /// (community code + member number both mandatory) since the no-code
+  /// path is disabled for that build.
   @State private var hasCommunityCode: Bool?
+
+  /// Snapshot of the `PUBLIC_ON` entitlement captured at view construction.
+  /// Drives both the initial value of `hasCommunityCode` and the back-arrow
+  /// behavior — when public sign-up is off, "back" must dismiss the sheet
+  /// directly rather than returning to a choice screen the user can never
+  /// see.
+  private let publicSignUpEnabled: Bool
+
+  init() {
+    let publicOn = readEntitlement("PUBLIC_ON")
+    self.publicSignUpEnabled = publicOn
+    // When public sign-up is gated off, jump straight into the invite-only
+    // form so the user is asked for their community code and member number
+    // up front. Otherwise leave the state at nil so the choice screen
+    // renders first.
+    self._hasCommunityCode = State(initialValue: publicOn ? nil : true)
+  }
 
   // MARK: - Form fields
 
@@ -110,8 +133,12 @@ struct MemberRegistrationView: View {
     .toolbar {
       ToolbarItem(placement: .navigationBarLeading) {
         Button(action: {
-          if hasCommunityCode != nil {
-            // Go back to the choice screen
+          // When public sign-up is gated off, the choice screen is bypassed
+          // entirely — there's nothing behind the invite form to go back
+          // to, so "back" must always dismiss. When public sign-up is on,
+          // keep the existing two-step behavior (return to choice from a
+          // selected path, then dismiss from the choice screen).
+          if hasCommunityCode != nil && publicSignUpEnabled {
             hasCommunityCode = nil
             resetAllFields()
           } else {
