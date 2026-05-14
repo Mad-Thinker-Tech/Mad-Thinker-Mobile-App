@@ -12,6 +12,12 @@ struct SkeenaSystemApp: App {
     
     /// This initializer runs before the body is evaluated.
       init() {
+        // Cross-environment safety net: if the cached access token was issued for
+        // a different Supabase project than this build targets, wipe it before
+        // AuthService.shared hydrates. Prevents PGRST301 401s when switching
+        // between DEV / STAGE / PROD builds on the same simulator / device.
+        AuthService.wipeAuthIfProjectMismatch()
+
         // When launched by UI tests with -resetAuthForUITests, wipe stored tokens
         // so every test run starts from a clean unauthenticated state.
         if CommandLine.arguments.contains("-resetAuthForUITests") {
