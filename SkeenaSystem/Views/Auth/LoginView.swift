@@ -111,6 +111,8 @@ struct LoginView: View {
                 .accessibilityIdentifier("passwordResetInfoLabel")
             }
 
+            policyAgreementText
+
             Button(action: { Task { await loginTapped() } }) {
               HStack {
                 if isBusy { ProgressView().tint(.white) }
@@ -208,6 +210,29 @@ struct LoginView: View {
       .zIndex(1000)
     }
     .preferredColorScheme(.dark)
+  }
+
+  @ViewBuilder
+  private var policyAgreementText: some View {
+    VStack(spacing: 2) {
+      Text("By logging in, you agree to our")
+        .font(.brandCaption)
+        .foregroundColor(.brandTextSecondary)
+      HStack(spacing: 4) {
+        Link("Privacy Policy", destination: LegalURLs.privacyPolicy)
+          .font(.brandCaption.weight(.semibold))
+          .foregroundColor(.brandAccent)
+        Text("and")
+          .font(.brandCaption)
+          .foregroundColor(.brandTextSecondary)
+        Link("Acceptable Use Policy", destination: LegalURLs.acceptableUsePolicy)
+          .font(.brandCaption.weight(.semibold))
+          .foregroundColor(.brandAccent)
+      }
+    }
+    .multilineTextAlignment(.center)
+    .padding(.horizontal)
+    .accessibilityIdentifier("loginPolicyAgreement")
   }
 
   // MARK: - Actions

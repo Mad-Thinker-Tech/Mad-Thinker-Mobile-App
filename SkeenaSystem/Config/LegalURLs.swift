@@ -3,6 +3,7 @@ import Foundation
 /// Single source of truth for legal-policy URLs surfaced in the app.
 ///
 /// Linked from:
+/// - `LoginView` (sign-in footer)
 /// - `MemberRegistrationView` (signup footer)
 /// - `PublicWelcomeView` (first-login overview for public users)
 /// - `ManageProfileView` (Legal section, every role)
