@@ -142,23 +142,17 @@ final class CommunityService: ObservableObject {
 
         guard let token = await AuthService.shared.currentAccessToken() else {
             AppLogging.log("[CommunityService] No access token for membership fetch", level: .warn, category: .community)
-            // Offline path: signIn() restored an offline session but there's no
-            // server token to fetch with. Hydrate from the per-user cache so
-            // the picker has something to render.
-            let cachedMemberId = AuthService.shared.currentMemberIdSnapshot
-                ?? UserDefaults.standard.string(forKey: "CachedMemberId")
-            let cached = Self.loadCachedMemberships(for: cachedMemberId)
-            await MainActor.run {
-                if !cached.isEmpty {
-                    if self.memberships.isEmpty {
-                        self.memberships = cached
-                    }
-                    AppLogging.log("[CommunityService] Offline fetch: using \(cached.count) cached membership(s) for memberId=\(cachedMemberId ?? "<nil>")", level: .info, category: .community)
-                } else {
-                    AppLogging.log("[CommunityService] Offline fetch: no cached memberships available for memberId=\(cachedMemberId ?? "<nil>")", level: .warn, category: .community)
-                }
-                self.hasFetchedMemberships = true
-            }
+            await hydrateFromCacheAndMarkFetched(reason: "no token")
+            return
+        }
+
+        // Offline-with-valid-token: cached JWT can stay valid up to ~58 min after
+        // going offline. Without this guard the launch path makes a real GET that
+        // hangs on URLSession's ~60s default timeout, leaving AppRootView stuck on
+        // the loading spinner. Cache fallback is the same one used in the no-token
+        // branch above.
+        if !NetworkMonitor.shared.isOnlineSnapshot {
+            await hydrateFromCacheAndMarkFetched(reason: "offline with valid token")
             return
         }
 
@@ -186,6 +180,9 @@ final class CommunityService: ObservableObject {
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        // Bound the launch path: belt-and-braces backstop for the NetworkMonitor
+        // startup race and half-connected Wi-Fi (lodge captive portals).
+        request.timeoutInterval = 8
 
         AppLogging.log("[CommunityService][DIAG] Fetching: \(comps.url?.absoluteString ?? "nil")", level: .debug, category: .community)
 
@@ -541,6 +538,28 @@ final class CommunityService: ObservableObject {
         UserDefaults.standard.set(activeCommunityTypeName, forKey: kActiveCommunityTypeName)
         if let configData = try? JSONEncoder().encode(activeCommunityConfig) {
             UserDefaults.standard.set(configData, forKey: kActiveCommunityConfig)
+        }
+    }
+
+    /// Shared offline branch for `fetchMemberships()`: pulls per-user cached
+    /// memberships into the published list (without clobbering an existing
+    /// in-memory set) and flips `hasFetchedMemberships = true` so AppRootView
+    /// stops showing the launch spinner. Used by both the no-token and the
+    /// offline-with-valid-token paths.
+    private func hydrateFromCacheAndMarkFetched(reason: String) async {
+        let cachedMemberId = AuthService.shared.currentMemberIdSnapshot
+            ?? UserDefaults.standard.string(forKey: "CachedMemberId")
+        let cached = Self.loadCachedMemberships(for: cachedMemberId)
+        await MainActor.run {
+            if !cached.isEmpty {
+                if self.memberships.isEmpty {
+                    self.memberships = cached
+                }
+                AppLogging.log("[CommunityService] Offline fetch (\(reason)): using \(cached.count) cached membership(s) for memberId=\(cachedMemberId ?? "<nil>")", level: .info, category: .community)
+            } else {
+                AppLogging.log("[CommunityService] Offline fetch (\(reason)): no cached memberships available for memberId=\(cachedMemberId ?? "<nil>")", level: .warn, category: .community)
+            }
+            self.hasFetchedMemberships = true
         }
     }
 

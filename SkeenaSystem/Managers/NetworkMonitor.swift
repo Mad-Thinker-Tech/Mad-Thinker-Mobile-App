@@ -48,4 +48,17 @@ nonisolated final class NetworkMonitor: @unchecked Sendable {
     }
     pathMonitor.start(queue: queue)
   }
+
+  /// Test seam: forces the snapshot/publisher to the given value so unit tests
+  /// can exercise the offline branches in `AuthService` / `CommunityService`
+  /// without toggling real network. Mirrors the `AuthService.resetSharedForTests`
+  /// convention. Tests must reset to `true` in `tearDown` to avoid leaking
+  /// offline state into sibling tests via the shared singleton. The real
+  /// `NWPathMonitor` may overwrite this on the next path transition — fine in
+  /// practice since unit tests don't transition the host network.
+  nonisolated func setOnlineSnapshotForTests(_ online: Bool) {
+    if _isOnline.value != online {
+      _isOnline.send(online)
+    }
+  }
 }

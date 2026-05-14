@@ -531,11 +531,19 @@ final class AuthService: ObservableObject {
         AppLogging.log("[Profile] no access token for profile fetch", level: .warn, category: .auth)
         return
       }
+      // Offline short-circuit: AuthService.init() already hydrated names/role/memberId
+      // from UserDefaults, so AppRootView routing works without a network fetch.
+      if !NetworkMonitor.shared.isOnlineSnapshot {
+        AppLogging.log("[Profile] offline; using cached profile", level: .info, category: .auth)
+        return
+      }
 
       var req = URLRequest(url: projectURL.appendingPathComponent("/auth/v1/user"))
       req.httpMethod = "GET"
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
       req.setValue(anonPublicKey, forHTTPHeaderField: "apikey")
+      // Bounded so the launch path never sits on URLSession's ~60s default.
+      req.timeoutInterval = 8
 
       do {
         let (data, resp) = try await session.data(for: req)
@@ -661,12 +669,17 @@ final class AuthService: ObservableObject {
       AppLogging.log("[Profile][my-profile] no access token; skipping supplement fetch", level: .debug, category: .auth)
       return
     }
+    if !NetworkMonitor.shared.isOnlineSnapshot {
+      AppLogging.log("[Profile][my-profile] offline; skipping supplement fetch", level: .info, category: .auth)
+      return
+    }
 
     let url = projectURL.appendingPathComponent("/functions/v1/my-profile")
     var req = URLRequest(url: url)
     req.httpMethod = "GET"
     req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     req.setValue(anonPublicKey, forHTTPHeaderField: "apikey")
+    req.timeoutInterval = 8
 
     do {
       let (data, resp) = try await session.data(for: req)
@@ -905,6 +918,14 @@ final class AuthService: ObservableObject {
 
     // MARK: - Token refresh
     private func refreshAccessToken() async -> String? {
+      // Short-circuit offline so the launch path never hangs on URLSession's
+      // ~60s default timeout when the cached JWT is expired but we can't reach
+      // Supabase. Callers already handle the nil return as "no usable token".
+      if !NetworkMonitor.shared.isOnlineSnapshot {
+        AppLogging.log("[Refresh] offline; skipping refresh", level: .info, category: .auth)
+        return nil
+      }
+
       // If a refresh Task already exists, await it
       if let existing = refreshTask {
         AppLogging.log("[Refresh] awaiting existing refresh task…", level: .debug, category: .auth)
@@ -941,6 +962,7 @@ final class AuthService: ObservableObject {
           req.httpMethod = "POST"
           req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
           req.setValue(self.anonPublicKey, forHTTPHeaderField: "apikey")
+          req.timeoutInterval = 8
 
           // Build a form-encoded body too (covers mocks that inspect body)
           let encodedRefresh = refreshTok.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? refreshTok
