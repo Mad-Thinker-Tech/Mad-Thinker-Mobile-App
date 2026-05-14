@@ -1388,6 +1388,59 @@ private enum Keychain {
   }
 }
 
+// MARK: - Cross-Project Token Guard
+
+extension AuthService {
+  /// Decodes the `iss` claim from the cached access token and returns its host.
+  /// Returns nil if no token is cached or the JWT is malformed.
+  private static func projectHostFromCachedAccessToken() -> String? {
+    guard let token = Keychain.get("epicwaters.auth.access_token"),
+          !token.isEmpty else { return nil }
+    let parts = token.split(separator: ".")
+    guard parts.count >= 2 else { return nil }
+    var b64 = String(parts[1])
+      .replacingOccurrences(of: "-", with: "+")
+      .replacingOccurrences(of: "_", with: "/")
+    while b64.count % 4 != 0 { b64.append("=") }
+    guard let data = Data(base64Encoded: b64),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let iss = obj["iss"] as? String,
+          let url = URL(string: iss)
+    else { return nil }
+    return url.host
+  }
+
+  /// Wipes cached auth + offline state when the cached access token was issued
+  /// for a different Supabase project than this build targets. Prevents
+  /// PGRST301 "No suitable key" 401s when developers / TestFlight testers
+  /// switch between DEV / STAGE / PROD builds without signing out first.
+  /// Safe to call before `AuthService.shared` is accessed — invoke from `App.init`.
+  static func wipeAuthIfProjectMismatch() {
+    guard let tokenHost = projectHostFromCachedAccessToken() else { return }
+    let bundledHost = AppEnvironment.shared.projectURL.host ?? ""
+    guard !bundledHost.isEmpty, tokenHost != bundledHost else { return }
+
+    AppLogging.log(
+      "[AuthService] project host mismatch: token issued for '\(tokenHost)', build expects '\(bundledHost)'. Wiping cached auth + offline state.",
+      level: .warn,
+      category: .auth
+    )
+
+    let keychainAccounts = [
+      "epicwaters.auth.access_token",
+      "epicwaters.auth.refresh_token",
+      "epicwaters.auth.access_token_exp",
+      "OfflineLastPassword",
+    ]
+    for account in keychainAccounts {
+      Keychain.delete(account)
+    }
+    for key in ["OfflineLastEmail", "CachedFirstName", "CachedLastName", "CachedUserType", "CachedMemberId"] {
+      UserDefaults.standard.removeObject(forKey: key)
+    }
+  }
+}
+
 // MARK: - JWT Helpers
 
 extension AuthService {
