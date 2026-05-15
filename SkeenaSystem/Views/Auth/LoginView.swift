@@ -11,9 +11,9 @@ struct LoginView: View {
   @State private var password: String = ""
   @State private var isBusy = false
   @State private var errorText: String?
-  @State private var passwordResetInfo: String?
 
   @State private var showRegistration = false
+  @State private var showPasswordReset = false
   @FocusState private var focusedField: Field?
 
   @State private var isBiometricAvailable: Bool = BiometricAuth.shared.canUseBiometrics
@@ -103,14 +103,6 @@ struct LoginView: View {
                 .accessibilityIdentifier("loginErrorLabel")
             }
 
-            if let info = passwordResetInfo {
-              Text(info)
-                .font(.brandFootnote)
-                .foregroundColor(.brandSuccess)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("passwordResetInfoLabel")
-            }
-
             policyAgreementText
 
             Button(action: { Task { await loginTapped() } }) {
@@ -146,7 +138,7 @@ struct LoginView: View {
             }
 
             Button {
-              Task { await resetPasswordTapped() }
+              showPasswordReset = true
             } label: {
               Text("Forgot password?")
                 .font(.brandFootnote)
@@ -154,6 +146,7 @@ struct LoginView: View {
                 .foregroundColor(.brandTextPrimary.opacity(0.8))
             }
             .padding(.top, 4)
+            .accessibilityIdentifier("forgotPasswordButton")
           }
           .padding(.horizontal)
 
@@ -187,6 +180,9 @@ struct LoginView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .preferredColorScheme(.dark)
+      }
+      .sheet(isPresented: $showPasswordReset) {
+        PasswordResetSheet(initialEmail: email.trimmingCharacters(in: .whitespaces))
       }
       .task {
         isBiometricAvailable = BiometricAuth.shared.canUseBiometrics
@@ -310,24 +306,6 @@ struct LoginView: View {
     } catch {
       errorText = "Face ID failed. Please try again or sign in with your password."
     }
-  }
-
-  private func resetPasswordTapped() async {
-    guard !email.isEmpty else {
-      errorText = "Enter your email above first."
-      return
-    }
-    passwordResetInfo = nil
-    errorText = nil
-    isBusy = true
-    do {
-      try await auth.requestPasswordReset(email: email.trimmingCharacters(in: .whitespaces))
-      passwordResetInfo = "Please check your email to reset your password."
-    } catch {
-      errorText = error.localizedDescription
-      passwordResetInfo = nil
-    }
-    isBusy = false
   }
 
   // MARK: - JWT Logging
