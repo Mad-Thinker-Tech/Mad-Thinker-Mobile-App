@@ -71,8 +71,15 @@ struct ResearcherLandingView: View {
             .padding(.horizontal, 20)
             .padding(.top, 2)
 
-            CommunityLogoView(config: communityService.activeCommunityConfig, size: 120)
+            // Sized smaller than the guide/angler landings (which use 160) so
+            // tall or square logos don't crowd the Alpha tag above and the
+            // Fisheries Conditions tile below — both adjacent in a
+            // `VStack(spacing: 0)` with no breathing room. The vertical
+            // padding gives the logo a clean margin without changing the
+            // surrounding layout.
+            CommunityLogoView(config: communityService.activeCommunityConfig, size: 96)
               .frame(maxWidth: .infinity)
+              .padding(.vertical, 8)
           }
           .padding(.top, 12)
 
