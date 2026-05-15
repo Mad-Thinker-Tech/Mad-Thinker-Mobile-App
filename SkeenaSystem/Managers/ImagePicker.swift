@@ -62,12 +62,22 @@ struct ImagePicker: UIViewControllerRepresentable {
           exifLocation = asset.location
         }
 
+        // Camera-captured photos carry their EXIF settings under .mediaMetadata
+        // (a NSDictionary of kCGImagePropertyExif* keys bridged to String).
+        // Library picks via this controller usually don't, so this is best-
+        // effort; ML diagnostics tolerate nil camera metadata cleanly.
+        let cameraMetadata: CapturedCameraMetadata? = {
+          guard let md = info[.mediaMetadata] as? [String: Any] else { return nil }
+          return CapturedCameraMetadata.parse(from: md)
+        }()
+
         let picked = PickedPhoto(
           image: image,
           exifDate: exifDate,
-          exifLocation: exifLocation
+          exifLocation: exifLocation,
+          cameraMetadata: cameraMetadata
         )
-        AppLogging.log("UIImagePicker picked image: size=\(Int(image.size.width))x\(Int(image.size.height)), exifDate=\(exifDate != nil), exifLocation=\(exifLocation != nil)", level: .info, category: .angler)
+        AppLogging.log("UIImagePicker picked image: size=\(Int(image.size.width))x\(Int(image.size.height)), exifDate=\(exifDate != nil), exifLocation=\(exifLocation != nil), cameraMetadata=\(cameraMetadata != nil)", level: .info, category: .angler)
         parent.onPickedPhoto(picked)
         AppLogging.log("UIImagePicker calling onPickedPhoto and dismissing", level: .debug, category: .angler)
         picker.dismiss(animated: true)
@@ -196,12 +206,19 @@ struct ImagePicker: UIViewControllerRepresentable {
           return
         }
 
-        AppLogging.log("PHImageManager fallback SUCCESS after \(String(format: "%.2f", elapsed))s: size=\(Int(img.size.width))x\(Int(img.size.height)) bytes=\(data.count) cgImage=\(img.cgImage != nil)", level: .info, category: .angler)
+        // Parse EXIF camera metadata off the raw bytes BEFORE handing the
+        // image to the host view — this is the only intake path with native
+        // Data access, so it's our best chance to capture flash/ISO/focal
+        // length / lens model for ML diagnostics. Cheap (no pixel decode).
+        let cameraMetadata = CapturedCameraMetadata.parse(from: data)
+
+        AppLogging.log("PHImageManager fallback SUCCESS after \(String(format: "%.2f", elapsed))s: size=\(Int(img.size.width))x\(Int(img.size.height)) bytes=\(data.count) cgImage=\(img.cgImage != nil) cameraMetadata=\(cameraMetadata != nil)", level: .info, category: .angler)
         DispatchQueue.main.async {
           let picked = PickedPhoto(
             image: img,
             exifDate: asset.creationDate,
-            exifLocation: asset.location
+            exifLocation: asset.location,
+            cameraMetadata: cameraMetadata
           )
           self.parent.onPickedPhoto(picked)
         }

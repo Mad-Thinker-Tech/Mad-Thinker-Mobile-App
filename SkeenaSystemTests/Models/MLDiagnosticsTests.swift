@@ -161,4 +161,46 @@ final class MLDiagnosticsTests: XCTestCase {
     let decoded = try JSONDecoder().decode(CatchReport.self, from: encoded)
     XCTAssertNil(decoded.mlDiagnostics)
   }
+
+  // MARK: - EXIF / CapturedCameraMetadata
+
+  /// `CapturedCameraMetadata.isEmpty` is the gate ImagePicker uses to decide
+  /// whether to attach the struct at all. If we ever return a struct where
+  /// every EXIF field is nil, we'd ship a useless all-null `cameraMetadata`
+  /// blob server-side — pin the contract.
+  func testCapturedCameraMetadata_isEmpty_trueWhenAllFieldsNil() {
+    let empty = CapturedCameraMetadata()
+    XCTAssertTrue(empty.isEmpty)
+  }
+
+  func testCapturedCameraMetadata_isEmpty_falseWhenAnyFieldSet() {
+    XCTAssertFalse(CapturedCameraMetadata(iso: 100).isEmpty)
+    XCTAssertFalse(CapturedCameraMetadata(flashFired: false).isEmpty)
+    XCTAssertFalse(CapturedCameraMetadata(lensModel: "wide").isEmpty)
+  }
+
+  /// Sunny-16 inverse: `lux ≈ (250 × N²) / (t × ISO)`. Sanity-check the
+  /// math at a typical daylight shot (f/4, 1/500s, ISO 100) — should land
+  /// in the daylight range (~10k lux), well above indoor (~500 lux).
+  func testCapturedCameraMetadata_computedLuxApprox_daylightExposureLandsInDaylightRange() {
+    let meta = CapturedCameraMetadata(iso: 100, exposureSeconds: 1.0 / 500.0, fNumber: 4.0)
+    let lux = meta.computedLuxApprox
+    XCTAssertNotNil(lux)
+    XCTAssertGreaterThan(lux ?? 0, 5_000, "Daylight Sunny-16-ish exposure should compute to > 5,000 lux")
+    XCTAssertLessThan(lux ?? .infinity, 50_000, "Daylight exposure shouldn't exceed midday sun (~50k lux)")
+  }
+
+  /// Partial EXIF (e.g. ISO missing) can't yield a meaningful lux estimate
+  /// — must return nil so the JSONB column doesn't carry a misleading
+  /// computed value. Same expectation when t or N is missing.
+  func testCapturedCameraMetadata_computedLuxApprox_nilWhenInputsIncomplete() {
+    XCTAssertNil(CapturedCameraMetadata(exposureSeconds: 1.0 / 500.0, fNumber: 4.0).computedLuxApprox,
+                 "Missing ISO should produce nil lux")
+    XCTAssertNil(CapturedCameraMetadata(iso: 100, fNumber: 4.0).computedLuxApprox,
+                 "Missing exposure should produce nil lux")
+    XCTAssertNil(CapturedCameraMetadata(iso: 100, exposureSeconds: 1.0 / 500.0).computedLuxApprox,
+                 "Missing fNumber should produce nil lux")
+    XCTAssertNil(CapturedCameraMetadata(iso: 0, exposureSeconds: 1.0 / 500.0, fNumber: 4.0).computedLuxApprox,
+                 "ISO 0 must short-circuit to nil (would otherwise divide by zero)")
+  }
 }

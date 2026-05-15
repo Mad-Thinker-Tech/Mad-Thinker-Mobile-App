@@ -466,7 +466,8 @@ final class CatchChatViewModel: ObservableObject {
 
           let analysis = await analyzer.analyze(
             image: picked.image,
-            location: bestLocation
+            location: bestLocation,
+            cameraMetadata: picked.cameraMetadata
           )
 
         await MainActor.run {
