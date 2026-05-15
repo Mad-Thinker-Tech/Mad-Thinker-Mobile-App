@@ -81,6 +81,14 @@ public nonisolated struct CatchReport: Identifiable, Codable, Equatable, Sendabl
   public var lengthSource: String?
   /// Version of the LengthRegressor model that produced the estimate.
   public var modelVersion: String?
+  /// JSON-encoded `MLDiagnostics` snapshot from on-device analysis: ViT
+  /// confidences, raw model outputs, multi-model versions, stage timings,
+  /// MediaPipe landmarks, EXIF metadata. Shipped to the backend under
+  /// `initialAnalysis.mlDiagnostics` for retraining provenance. Stored
+  /// as raw `Data` so the on-disk format survives `MLDiagnostics` schema
+  /// evolution — decode failures are silent because the field is not
+  /// load-bearing for the UI.
+  public var mlDiagnostics: Data?
 
   // Girth & weight estimation (researcher flow) — final confirmed values.
   // The "estimated vs measured" distinction lives only on the live flow state
@@ -178,6 +186,7 @@ public nonisolated struct CatchReport: Identifiable, Codable, Equatable, Sendabl
     mlFeatureVector: Data? = nil,
     lengthSource: String? = nil,
     modelVersion: String? = nil,
+    mlDiagnostics: Data? = nil,
     girthInches: Double? = nil,
     weightLbs: Double? = nil,
     weightDivisor: Int? = nil,
@@ -239,6 +248,7 @@ public nonisolated struct CatchReport: Identifiable, Codable, Equatable, Sendabl
     self.mlFeatureVector = mlFeatureVector
     self.lengthSource = lengthSource
     self.modelVersion = modelVersion
+    self.mlDiagnostics = mlDiagnostics
     self.girthInches = girthInches
     self.weightLbs = weightLbs
     self.weightDivisor = weightDivisor

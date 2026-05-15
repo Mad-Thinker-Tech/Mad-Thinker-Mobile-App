@@ -168,6 +168,13 @@ nonisolated final class UploadCatchReport: Sendable {
     let mlFeatures: [String: Double]?
     let lengthSource: String?
     let modelVersion: String?
+    /// On-device ML provenance: confidences, raw model outputs, multi-model
+    /// versions, stage timings, MediaPipe landmarks, EXIF. Decoded from the
+    /// JSON-encoded `Data` blob persisted on `CatchReport.mlDiagnostics`.
+    /// Backend stores `initialAnalysis` as JSONB so this nested object is
+    /// forward-compatible — new optional keys can be added in `MLDiagnostics`
+    /// without breaking the v5 contract.
+    let mlDiagnostics: MLDiagnostics?
   }
 
   private struct WeightEstimationDTO: Codable {
@@ -666,6 +673,13 @@ nonisolated final class UploadCatchReport: Sendable {
       return Dictionary(uniqueKeysWithValues: zip(CatchPhotoAnalyzer.featureCols, fv.asArray))
     }
 
+    // ML diagnostics blob (Tier 1 expansion: confidences, raw outputs,
+    // landmarks, EXIF). Decode failure is silent — the field is non-load-
+    // bearing and an absent value just renders as null server-side.
+    let mlDiagnostics: MLDiagnostics? = r.mlDiagnostics.flatMap { data in
+      try? Self.sharedDecoder.decode(MLDiagnostics.self, from: data)
+    }
+
     let initial = InitialAnalysisDTO(
       riverName: r.initialRiverName,
       species: r.initialSpecies,
@@ -674,7 +688,8 @@ nonisolated final class UploadCatchReport: Sendable {
       lengthInches: r.initialLengthInches,
       mlFeatures: mlFeatures,
       lengthSource: r.lengthSource,
-      modelVersion: r.modelVersion
+      modelVersion: r.modelVersion,
+      mlDiagnostics: mlDiagnostics
     )
 
     #if DEBUG

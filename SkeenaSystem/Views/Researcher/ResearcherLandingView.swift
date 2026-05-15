@@ -342,6 +342,7 @@ struct ResearcherLandingView: View {
       mlFeatureVector: snapshot.mlFeatureVector,
       lengthSource: snapshot.lengthSource,
       modelVersion: snapshot.modelVersion,
+      mlDiagnostics: snapshot.mlDiagnostics,
       girthInches: snapshot.girthInches,
       weightLbs: snapshot.weightLbs,
       weightDivisor: snapshot.weightDivisor,

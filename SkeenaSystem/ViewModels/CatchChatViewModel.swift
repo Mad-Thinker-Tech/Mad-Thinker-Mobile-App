@@ -2100,6 +2100,9 @@ final class CatchChatViewModel: ObservableObject {
     var lengthSource: String?
     /// Version of the LengthRegressor model that produced the estimate.
     var modelVersion: String?
+    /// JSON-encoded `MLDiagnostics`: confidences, raw model outputs, multi-
+    /// model versions, stage timings, landmarks, EXIF. See model docstring.
+    var mlDiagnostics: Data?
 
     // Girth & weight estimation (researcher flow) — final confirmed values.
     // The "is estimated" flags live only on ResearcherCatchFlowManager; they're
@@ -2224,6 +2227,7 @@ final class CatchChatViewModel: ObservableObject {
       lengthSource: researcherFlow?.lengthSource?.rawValue
         ?? (currentAnalysis?.lengthSource ?? initialAnalysis?.lengthSource)?.rawValue,
       modelVersion: initialAnalysis?.modelVersion,
+      mlDiagnostics: encodeMLDiagnostics(from: initialAnalysis),
       girthInches: researcherFlow?.girthInches,
       weightLbs: researcherFlow?.weightLbs,
       weightDivisor: researcherFlow?.divisor,
@@ -2265,6 +2269,40 @@ final class CatchChatViewModel: ObservableObject {
     guard let flow = researcherFlow,
           flow.studyType == type else { return nil }
     return nonEmpty(flow.studyTagId)
+  }
+
+  /// Build the `MLDiagnostics` provenance blob from the initial (pre-user-
+  /// correction) analysis snapshot and JSON-encode it for storage on the
+  /// `CatchReport`. Returns nil when no analysis ran (e.g. researcher
+  /// quick-capture without a photo) so the field stays absent server-side.
+  ///
+  /// This first pass only pulls fields the analyzer already computes and
+  /// surfaces today; richer fields (raw model outputs, multi-model versions,
+  /// stage timings, hand landmarks, EXIF) are populated by upcoming
+  /// `CatchPhotoAnalyzer` instrumentation work. The codable shape is forward-
+  /// compatible — every field is optional, so older diagnostics survive
+  /// decode unchanged once the new fields start arriving.
+  private func encodeMLDiagnostics(from analysis: CatchPhotoAnalysis?) -> Data? {
+    guard let analysis else { return nil }
+    let alternatives: [MLDiagnostics.SpeciesAlternative]? = analysis.speciesAlternatives.isEmpty
+      ? nil
+      : analysis.speciesAlternatives.map {
+          MLDiagnostics.SpeciesAlternative(
+            label: $0.label, confidence: $0.confidence, isPrimary: $0.isPrimary
+          )
+        }
+    let versions: MLDiagnostics.ModelVersions? = analysis.modelVersion.map {
+      MLDiagnostics.ModelVersions(lengthRegressor: $0)
+    }
+    let diagnostics = MLDiagnostics(
+      speciesConfidence: analysis.speciesConfidence,
+      lifecycleStageConfidence: analysis.lifecycleStageConfidence,
+      sexConfidence: analysis.sexConfidence,
+      lengthAtSpeciesCap: analysis.lengthAtSpeciesCap,
+      speciesAlternatives: alternatives,
+      modelVersions: versions
+    )
+    return try? JSONEncoder().encode(diagnostics)
   }
 
   /// Trim + nil-coalesce so empty strings never leak into the snapshot.
