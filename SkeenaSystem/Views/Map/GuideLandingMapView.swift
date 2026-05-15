@@ -37,6 +37,13 @@ struct GuideLandingAnnotation: Identifiable {
   /// Drives the hollow pin variant so users can see what they've recorded
   /// today before it has been uploaded.
   let isPendingUpload: Bool
+  /// Screen-pixel offset applied to the icon at render time. Non-zero only
+  /// when this annotation shares a coordinate (within ~5m) with one or more
+  /// other annotations — `GuideLandingMapView.applyOverlapOffsets` fans
+  /// collided pins around a small circle so every pin is visible. The
+  /// underlying `coordinate` is untouched; this only shifts the icon's
+  /// display position, not the data tied to it.
+  var iconOffset: CGSize = .zero
 }
 
 // MARK: - Map View
@@ -53,7 +60,7 @@ struct GuideLandingMapView: View {
   // MARK: - Derived annotations
 
   private var annotations: [GuideLandingAnnotation] {
-    reports.compactMap { r in
+    let base: [GuideLandingAnnotation] = reports.compactMap { r in
       guard let lat = r.latitude, let lon = r.longitude,
             lat.isFinite, lon.isFinite,
             abs(lat) <= 90, abs(lon) <= 180,
@@ -69,6 +76,54 @@ struct GuideLandingMapView: View {
         isPendingUpload: r.isPendingUpload
       )
     }
+    return Self.applyOverlapOffsets(base)
+  }
+
+  /// Quantize a coordinate to a coarse key so pins from the same fishing
+  /// hole (or repeat catches on the same drift / boat seat) cluster
+  /// together. 5e-5 deg ≈ 5.5m at the equator — well inside consumer-phone
+  /// GPS noise so we don't fracture genuinely-co-located reports across
+  /// adjacent buckets.
+  private static func clusterKey(_ coord: CLLocationCoordinate2D) -> String {
+    let q: Double = 5e-5
+    let lat = (coord.latitude / q).rounded() * q
+    let lon = (coord.longitude / q).rounded() * q
+    return String(format: "%.6f,%.6f", lat, lon)
+  }
+
+  /// For any group of annotations whose coordinates collide (within the
+  /// `clusterKey` tolerance), fan them around a small circle in screen-pixel
+  /// space so each pin is individually visible. `coordinate` is unchanged —
+  /// only the icon offset shifts, so taps and callouts still reference the
+  /// real GPS. Singletons receive a zero offset. Order within a cluster is
+  /// stable (input order) so re-renders don't shuffle the fan.
+  private static func applyOverlapOffsets(_ list: [GuideLandingAnnotation]) -> [GuideLandingAnnotation] {
+    var clusters: [String: [Int]] = [:]
+    for (idx, ann) in list.enumerated() {
+      clusters[clusterKey(ann.coordinate), default: []].append(idx)
+    }
+    guard clusters.values.contains(where: { $0.count > 1 }) else { return list }
+
+    var result = list
+    let baseRadius: Double = 14
+    for indices in clusters.values where indices.count > 1 {
+      let n = indices.count
+      // Ring radius grows gently with cluster size so 6+ pins don't crush
+      // into each other. Most real clusters are 2–4, where this just gives
+      // baseRadius. Cap so the fan stays inside reasonable visual bounds.
+      let radius = min(baseRadius * (1 + Double(max(0, n - 4)) * 0.15), 28)
+      for (i, listIdx) in indices.enumerated() {
+        // Start at -π/2 (top) and walk clockwise so the first pin sits
+        // above the GPS dot — easier to mentally associate "where I tapped"
+        // with "where the data is".
+        let angle = (2 * .pi * Double(i)) / Double(n) - .pi / 2
+        result[listIdx].iconOffset = CGSize(
+          width: radius * cos(angle),
+          height: radius * sin(angle)
+        )
+      }
+    }
+    return result
   }
 
   // MARK: - Group by type for PointAnnotationGroup (one group per pin style)
@@ -160,7 +215,19 @@ struct GuideLandingMapView: View {
       let pinName = annotation.isPendingUpload
         ? "\(type.pinName)-pending"
         : type.pinName
-      return PointAnnotation(coordinate: annotation.coordinate)
+      // Mapbox iconOffset is a `[Double]?` property (NOT a chain method)
+      // expressed as [x, y] in pixels with positive-y = DOWN (screen-space).
+      // Our `iconOffset.height` is computed in standard math coords
+      // (positive-y = up), so we flip the sign so a pin at angle -π/2
+      // (which our fan-out helper places at the top of the ring) actually
+      // renders above the GPS dot. Skip the property assignment entirely
+      // for non-collided pins so Mapbox stays on its default rendering
+      // path for the common case.
+      var pa = PointAnnotation(coordinate: annotation.coordinate)
+      if annotation.iconOffset != .zero {
+        pa.iconOffset = [Double(annotation.iconOffset.width), -Double(annotation.iconOffset.height)]
+      }
+      return pa
         .image(.init(image: pinImage, name: pinName))
         .iconAnchor(.bottom)
         .onTapGesture { _ in
