@@ -178,7 +178,8 @@ final class CatchPhotoAnalyzer {
 
   func analyze(
     image: UIImage,
-    location: CLLocation?
+    location: CLLocation?,
+    cameraMetadata: CapturedCameraMetadata? = nil
   ) async -> CatchPhotoAnalysis {
     // ML-provenance bookkeeping. Each stage records its own wall-clock time;
     // raw model outputs and derived geometry land in their own locals and
@@ -464,7 +465,15 @@ final class CatchPhotoAnalyzer {
       personFishOverlapRatio: personFishOverlap,
       handLandmarks: handResult.allLandmarks.isEmpty ? nil : handResult.allLandmarks,
       modelVersions: modelVersionsSnapshot(),
-      stageTimingsMs: stageTimings
+      stageTimingsMs: stageTimings,
+      exifFlashFired: cameraMetadata?.flashFired,
+      exifIso: cameraMetadata?.iso,
+      exifExposureSeconds: cameraMetadata?.exposureSeconds,
+      exifFNumber: cameraMetadata?.fNumber,
+      exifFocalLengthMm: cameraMetadata?.focalLengthMm,
+      exifFocalLength35mm: cameraMetadata?.focalLength35mm,
+      exifLensModel: cameraMetadata?.lensModel,
+      computedLuxApprox: cameraMetadata?.computedLuxApprox
     )
 
     return CatchPhotoAnalysis(
