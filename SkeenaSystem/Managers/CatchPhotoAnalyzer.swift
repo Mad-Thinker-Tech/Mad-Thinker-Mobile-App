@@ -296,9 +296,12 @@ final class CatchPhotoAnalyzer {
     let sexText: String? = if let s = sexResult { "Sex (model): \(s.label)" } else { "Unknown" }
     let sexConfidence: Float? = sexResult?.confidence
 
-    // 5. Hand pose detection via MediaPipe
+    // 5. Hand pose detection via MediaPipe — best-hand measurement feeds
+    // the length feature vector, full landmark snapshot goes into
+    // MLDiagnostics for retraining.
     let handStartedAt = Date()
-    let handMeasurement = detectHand(on: image)
+    let handResult = detectHand(on: image)
+    let handMeasurement = handResult.bestMeasurement
     stageTimings.append(.init(stage: "handLandmarker", ms: Date().timeIntervalSince(handStartedAt) * 1000))
 
     // 6. Length estimation
@@ -459,6 +462,7 @@ final class CatchPhotoAnalyzer {
       yoloPersonConfidence: detection.personBox?.confidence,
       fishBoxAspectRatio: fishAspect,
       personFishOverlapRatio: personFishOverlap,
+      handLandmarks: handResult.allLandmarks.isEmpty ? nil : handResult.allLandmarks,
       modelVersions: modelVersionsSnapshot(),
       stageTimingsMs: stageTimings
     )
@@ -844,17 +848,29 @@ final class CatchPhotoAnalyzer {
     let confidence: Float      // handedness confidence
   }
 
-  /// Detects hand landmarks via MediaPipe and returns finger measurements for the best hand.
-  /// Applies same sanity filters as the Python training pipeline.
-  private func detectHand(on image: UIImage) -> HandMeasurement? {
+  /// Container for both the best-hand summary used by the length feature
+  /// vector and the raw MediaPipe landmark snapshot used by `MLDiagnostics`.
+  /// `bestMeasurement` keeps the existing nil-semantic ("no hand passed
+  /// sanity"); `allLandmarks` is populated whenever MediaPipe returns any
+  /// hands at all, so retraining still gets signal from hands that
+  /// failed the heuristic-friendly filters.
+  struct HandDetection {
+    let bestMeasurement: HandMeasurement?
+    let allLandmarks: [MLDiagnostics.HandLandmark]
+  }
+
+  /// Detects hand landmarks via MediaPipe and returns finger measurements for the best hand,
+  /// plus a raw landmark snapshot for ML diagnostics. Applies same sanity filters as the
+  /// Python training pipeline (best-hand selection only — `allLandmarks` survives them).
+  private func detectHand(on image: UIImage) -> HandDetection {
     #if canImport(MediaPipeTasksVision)
-    guard image.cgImage != nil else { return nil }
+    guard image.cgImage != nil else { return HandDetection(bestMeasurement: nil, allLandmarks: []) }
 
     // Lazy-cache the HandLandmarker so the .task model is only loaded once.
     if Self._handLandmarker == nil {
       guard let modelPath = Bundle.main.path(forResource: "hand_landmarker", ofType: "task") else {
         AppLogging.log("detectHand: hand_landmarker.task not found in bundle", level: .error, category: .ml)
-        return nil
+        return HandDetection(bestMeasurement: nil, allLandmarks: [])
       }
       let options = HandLandmarkerOptions()
       options.baseOptions.modelAssetPath = modelPath
@@ -866,23 +882,42 @@ final class CatchPhotoAnalyzer {
     }
     guard let landmarker = Self._handLandmarker else {
       AppLogging.log("detectHand: failed to create HandLandmarker", level: .error, category: .ml)
-      return nil
+      return HandDetection(bestMeasurement: nil, allLandmarks: [])
     }
 
     let mpImage = try? MPImage(uiImage: image)
     guard let mpImage else {
       AppLogging.log("detectHand: failed to create MPImage", level: .error, category: .ml)
-      return nil
+      return HandDetection(bestMeasurement: nil, allLandmarks: [])
     }
 
     guard let result = try? landmarker.detect(image: mpImage) else {
       AppLogging.log("detectHand: detection failed", level: .error, category: .ml)
-      return nil
+      return HandDetection(bestMeasurement: nil, allLandmarks: [])
     }
 
     guard !result.landmarks.isEmpty else {
       AppLogging.log("detectHand: no hands detected", level: .debug, category: .ml)
-      return nil
+      return HandDetection(bestMeasurement: nil, allLandmarks: [])
+    }
+
+    // Snapshot every MediaPipe-returned landmark (every hand × every point)
+    // BEFORE the sanity-filter loop, so retraining sees signal even from
+    // hands the heuristic rejects. MediaPipe's NormalizedLandmark exposes
+    // visibility/presence as NSNumber? — we read .floatValue and nil out
+    // missing values cleanly.
+    var allLandmarks: [MLDiagnostics.HandLandmark] = []
+    allLandmarks.reserveCapacity(result.landmarks.reduce(0) { $0 + $1.count })
+    for (handIdx, hand) in result.landmarks.enumerated() {
+      for (lmIdx, lm) in hand.enumerated() {
+        allLandmarks.append(MLDiagnostics.HandLandmark(
+          handIndex: handIdx,
+          landmarkIndex: lmIdx,
+          x: lm.x, y: lm.y, z: lm.z,
+          visibility: lm.visibility?.floatValue,
+          presence: lm.presence?.floatValue
+        ))
+      }
     }
 
     let imgW = Float(image.size.width)
@@ -947,15 +982,15 @@ final class CatchPhotoAnalyzer {
     }
 
     if let m = bestMeasurement {
-      AppLogging.log({ "detectHand: fingerWidth=\(m.fingerWidthPx)px, fingerLength=\(m.fingerLengthPx)px, conf=\(m.confidence)" }, level: .info, category: .ml)
+      AppLogging.log({ "detectHand: fingerWidth=\(m.fingerWidthPx)px, fingerLength=\(m.fingerLengthPx)px, conf=\(m.confidence), landmarks=\(allLandmarks.count)" }, level: .info, category: .ml)
     } else {
-      AppLogging.log("detectHand: all hands failed sanity filters", level: .debug, category: .ml)
+      AppLogging.log({ "detectHand: all hands failed sanity filters (raw landmarks captured: \(allLandmarks.count))" }, level: .debug, category: .ml)
     }
 
-    return bestMeasurement
+    return HandDetection(bestMeasurement: bestMeasurement, allLandmarks: allLandmarks)
     #else
     AppLogging.log("detectHand: MediaPipeTasksVision not available, skipping hand detection", level: .info, category: .ml)
-    return nil
+    return HandDetection(bestMeasurement: nil, allLandmarks: [])
     #endif
   }
 
