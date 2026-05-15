@@ -29,3 +29,6 @@ SkeenaSystem/Config/Secrets.xcconfig
 .a5c/
 babysitter*.log
 
+# UAT test-case artifacts (manually maintained spreadsheets, not source-of-truth)
+docs/uat/
+
