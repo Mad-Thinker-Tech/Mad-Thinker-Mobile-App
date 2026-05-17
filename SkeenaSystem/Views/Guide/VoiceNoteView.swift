@@ -43,6 +43,21 @@ nonisolated struct LocalVoiceNote: Identifiable, Codable, Equatable, Sendable {
 // MARK: - Storage
 
 // =====================================================
+/// Persistent store for local `LocalVoiceNote` records.
+///
+/// Storage is scoped by `(memberId, communityId)` so that signing out, signing
+/// in as a different user, or switching the active community produces a
+/// completely isolated voice-note history. Mirrors `CatchReportStore`.
+///
+/// On-disk layout:
+///
+///     Documents/VoiceNotes/<memberId>/<communityId>/note_<uuid>.{json,m4a}
+///
+/// When either identity signal is missing the store is *unbound*: `notes` is
+/// empty and writes become logged no-ops. The store auto-rebinds whenever
+/// `AuthService.currentMemberId` or `CommunityService.activeCommunityId`
+/// changes via Combine subscription.
+///
 /// `nonisolated` so the upload pipeline can read voice-note metadata
 /// synchronously. All mutations write through `setNotesOnMain`. See
 /// `CatchReportStore` for the full pattern rationale.
@@ -63,25 +78,104 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
 
   // FileManager isn't formally Sendable but `.default` is safe to share.
   nonisolated(unsafe) private let fm = FileManager.default
-  private let notesDirName = "VoiceNotes"
-  private var notesDirURL: URL {
-    fm.urls(for: .documentDirectory, in: .userDomainMask).first!
-      .appendingPathComponent(notesDirName, isDirectory: true)
+  private let rootDirectoryURL: URL
+
+  /// Directory for the currently bound scope, or `nil` when unbound.
+  /// All reads/writes go through this — never fall back to `rootDirectoryURL`
+  /// directly for note I/O, or data will leak across users again.
+  private var boundDirectoryURL: URL?
+  private var boundMemberId: String?
+  private var boundCommunityId: String?
+
+  private var cancellables = Set<AnyCancellable>()
+
+  /// UserDefaults flag set once the one-time legacy migration has run for this install.
+  private static let migrationFlagKey = "VoiceNoteStore.migratedToScoped_v1"
+
+  /// Production initialiser — anchors under `Documents/VoiceNotes/` and
+  /// auto-rebinds on `AuthService` / `CommunityService` identity changes.
+  private convenience init() {
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let root = docs.appendingPathComponent("VoiceNotes", isDirectory: true)
+    self.init(rootDirectory: root, autoRebind: true)
   }
 
-  private init() { ensureDir(); loadAll() }
+  /// Designated initialiser.
+  ///
+  /// - Parameters:
+  ///   - rootDirectory: Parent directory containing `<memberId>/<communityId>/`
+  ///     subfolders. Tests inject a temp dir here.
+  ///   - autoRebind: When `true`, subscribes to identity changes and rebinds
+  ///     automatically. Tests pass `false` and call `rebind(...)` directly.
+  internal init(rootDirectory: URL, autoRebind: Bool) {
+    self.rootDirectoryURL = rootDirectory
+    ensureDir(at: rootDirectoryURL)
+    migrateLegacyLayoutIfNeeded()
 
-  func ensureDir() {
-    if !fm.fileExists(atPath: notesDirURL.path) {
-      try? fm.createDirectory(at: notesDirURL, withIntermediateDirectories: true)
-      VLog("Created notes directory at \(notesDirURL.path)")
+    if autoRebind {
+      Publishers.CombineLatest(
+        AuthService.shared.currentMemberIdPublisher,
+        CommunityService.shared.activeCommunityIdPublisher
+      )
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] member, community in
+        self?.rebind(memberId: member, communityId: community)
+      }
+      .store(in: &cancellables)
+    }
+  }
+
+  /// Whether the store is currently bound to a valid (memberId, communityId) scope.
+  var isBound: Bool { boundDirectoryURL != nil }
+
+  // MARK: - Scope binding (internal for tests)
+
+  /// Rebind to the given `(memberId, communityId)` pair. Either id `nil`/empty
+  /// moves the store to the unbound state (empty `notes`, writes become no-ops).
+  internal func rebind(memberId: String?, communityId: String?) {
+    let cleanMember = memberId?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let cleanCommunity = communityId?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let normalizedMember = (cleanMember?.isEmpty == false) ? cleanMember : nil
+    let normalizedCommunity = (cleanCommunity?.isEmpty == false) ? cleanCommunity : nil
+
+    if normalizedMember == boundMemberId && normalizedCommunity == boundCommunityId {
+      return
+    }
+
+    boundMemberId = normalizedMember
+    boundCommunityId = normalizedCommunity
+
+    if let m = normalizedMember, let c = normalizedCommunity {
+      let dir = rootDirectoryURL
+        .appendingPathComponent(m, isDirectory: true)
+        .appendingPathComponent(c, isDirectory: true)
+      boundDirectoryURL = dir
+      ensureDir(at: dir)
+      AppLogging.log("[VoiceNoteStore] rebind -> scoped path member=\(m) community=\(c)", level: .info, category: .audio)
+      loadAll()
+    } else {
+      boundDirectoryURL = nil
+      AppLogging.log("[VoiceNoteStore] rebind -> unbound (member=\(normalizedMember ?? "nil") community=\(normalizedCommunity ?? "nil"))", level: .info, category: .audio)
+      setNotesOnMain([])
+    }
+  }
+
+  private func ensureDir(at url: URL) {
+    if !fm.fileExists(atPath: url.path) {
+      try? fm.createDirectory(at: url, withIntermediateDirectories: true)
+      VLog("Created notes directory at \(url.path)")
     }
   }
 
   func loadAll() {
-    ensureDir()
+    guard let dir = boundDirectoryURL else {
+      setNotesOnMain([])
+      return
+    }
+    ensureDir(at: dir)
     do {
-      let urls = try fm.contentsOfDirectory(at: notesDirURL, includingPropertiesForKeys: nil)
+      let urls = try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
       let jsons = urls.filter { $0.lastPathComponent.hasSuffix(".json") }
       var loaded: [LocalVoiceNote] = []
       let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
@@ -117,8 +211,12 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
 
   @discardableResult
   func save(_ note: LocalVoiceNote) -> Bool {
-    ensureDir()
-    let url = notesDirURL.appendingPathComponent(note.jsonFilename)
+    guard let dir = boundDirectoryURL else {
+      AppLogging.log("[VoiceNoteStore] save() called while unbound — dropping note \(note.id)", level: .warn, category: .audio)
+      return false
+    }
+    ensureDir(at: dir)
+    let url = dir.appendingPathComponent(note.jsonFilename)
     do {
       let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]; enc
         .dateEncodingStrategy = .iso8601
@@ -132,8 +230,15 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
     }
   }
 
-  func audioURL(for note: LocalVoiceNote) -> URL { notesDirURL.appendingPathComponent(note.audioFilename) }
-  func jsonURL(for note: LocalVoiceNote) -> URL { notesDirURL.appendingPathComponent(note.jsonFilename) }
+  /// Resolve a note's audio/JSON URL within the bound scope. Falls back to the
+  /// root only when unbound — reads then simply miss, which is harmless.
+  func audioURL(for note: LocalVoiceNote) -> URL {
+    (boundDirectoryURL ?? rootDirectoryURL).appendingPathComponent(note.audioFilename)
+  }
+
+  func jsonURL(for note: LocalVoiceNote) -> URL {
+    (boundDirectoryURL ?? rootDirectoryURL).appendingPathComponent(note.jsonFilename)
+  }
 
   @discardableResult
   func addNew(
@@ -152,6 +257,10 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
       lat: location?.coordinate.latitude, lon: location?.coordinate.longitude,
       horizontalAccuracy: location?.horizontalAccuracy, status: .savedPendingUpload
     )
+    guard boundDirectoryURL != nil else {
+      AppLogging.log("[VoiceNoteStore] addNew() called while unbound — dropping note \(note.id)", level: .warn, category: .audio)
+      return note
+    }
     let dest = audioURL(for: note)
     try? FileManager.default.removeItem(at: dest)
     try? FileManager.default.moveItem(at: audioTempURL, to: dest)
@@ -159,12 +268,13 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
     return note
   }
 
-  // ✅ Add this:
   func delete(_ note: LocalVoiceNote) {
-    let audio = audioURL(for: note)
-    let json = jsonURL(for: note)
-    try? fm.removeItem(at: audio)
-    try? fm.removeItem(at: json)
+    guard boundDirectoryURL != nil else {
+      AppLogging.log("[VoiceNoteStore] delete() called while unbound — ignoring \(note.id)", level: .warn, category: .audio)
+      return
+    }
+    try? fm.removeItem(at: audioURL(for: note))
+    try? fm.removeItem(at: jsonURL(for: note))
     loadAll()
   }
 
@@ -173,6 +283,67 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
   }
 
   func lastTwo() -> [LocalVoiceNote] { Array(notes.prefix(2)) }
+
+  // MARK: - Legacy migration
+
+  /// One-time migration away from the legacy flat layout
+  /// (`VoiceNotes/note_<uuid>.{json,m4a}`).
+  ///
+  /// `LocalVoiceNote` carries no `memberId`/`communityId`, so legacy flat files
+  /// cannot be attributed to any user. Per the `CatchReportStore` product
+  /// decision, unattributable local data is **dropped** rather than leaked —
+  /// every regular file directly under the root is deleted. Per-scope
+  /// subdirectories are left untouched.
+  ///
+  /// Guarded by `migratedToScoped_v1` in UserDefaults so it runs exactly once.
+  internal func migrateLegacyLayoutIfNeeded() {
+    let defaults = UserDefaults.standard
+    if defaults.bool(forKey: Self.migrationFlagKey) {
+      return
+    }
+    defer { defaults.set(true, forKey: Self.migrationFlagKey) }
+
+    guard fm.fileExists(atPath: rootDirectoryURL.path) else {
+      return
+    }
+
+    let files: [URL]
+    do {
+      files = try fm.contentsOfDirectory(
+        at: rootDirectoryURL,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+      )
+    } catch {
+      AppLogging.log("[VoiceNoteStore] migration: listing root failed: \(error.localizedDescription)", level: .error, category: .audio)
+      return
+    }
+
+    var dropped = 0
+    for file in files {
+      var isDir: ObjCBool = false
+      guard fm.fileExists(atPath: file.path, isDirectory: &isDir), !isDir.boolValue else { continue }
+      try? fm.removeItem(at: file)
+      dropped += 1
+    }
+
+    if dropped > 0 {
+      AppLogging.log("[VoiceNoteStore] migration complete — dropped \(dropped) legacy unscoped voice-note file(s)", level: .info, category: .audio)
+    }
+  }
+
+  // MARK: - Test hooks
+
+  #if DEBUG
+  /// Reset the migration flag so tests can exercise `migrateLegacyLayoutIfNeeded`
+  /// repeatedly. Never call from app code.
+  internal static func resetMigrationFlagForTesting() {
+    UserDefaults.standard.removeObject(forKey: migrationFlagKey)
+  }
+
+  /// Expose the currently bound directory for assertion in tests.
+  internal var currentBoundDirectoryURL: URL? { boundDirectoryURL }
+  #endif
 }
 
 // =====================================================
