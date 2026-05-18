@@ -35,7 +35,7 @@ struct ResearcherMapView: View {
   @State private var tileCacheProgress: Double?
 
   var body: some View {
-    DarkPageTemplate(bottomToolbar: {
+    DarkPageTemplate(backgroundColor: .researcherBackground, navBarColor: .researcherBackground, bottomToolbar: {
       RoleAwareToolbar(activeTab: "maps")
     }) {
       content
@@ -57,8 +57,8 @@ struct ResearcherMapView: View {
   private var content: some View {
     if !fetchDone {
       ZStack {
-        Color.brandBackground
-        ProgressView().tint(.white)
+        Color.researcherBackground
+        ProgressView().tint(.researcherTextPrimary)
       }
     } else {
       ZStack(alignment: .top) {
@@ -71,7 +71,7 @@ struct ResearcherMapView: View {
         if mapReports.isEmpty {
           Text("No catches recorded yet")
             .font(.brandSubheadline.weight(.semibold))
-            .foregroundColor(.brandTextPrimary)
+            .foregroundColor(.researcherTextPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.brandScrim.opacity(0.6), in: Capsule())
@@ -86,7 +86,7 @@ struct ResearcherMapView: View {
               Text(nearest.label)
                 .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundColor(.brandTextPrimary)
+            .foregroundColor(.researcherTextPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.brandScrim.opacity(0.6), in: Capsule())
@@ -131,10 +131,10 @@ struct ResearcherMapView: View {
     HStack(spacing: 4) {
       Image(systemName: "clock.arrow.circlepath")
         .font(.system(size: 11, weight: .semibold))
-        .foregroundColor(.brandSuccess)
+        .foregroundColor(.researcherPrediction)
       Text("Cached \(relative)")
         .font(.brandCaption2.weight(.semibold))
-        .foregroundColor(.brandTextPrimary)
+        .foregroundColor(.researcherTextPrimary)
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 5)

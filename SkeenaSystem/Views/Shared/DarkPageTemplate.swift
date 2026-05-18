@@ -179,7 +179,7 @@ struct LegacyNavBarStyle: ViewModifier {
     navBar.standardAppearance = appearance
     navBar.scrollEdgeAppearance = appearance
     navBar.compactAppearance = appearance
-    navBar.tintColor = .brandTextPrimary
+    navBar.tintColor = .brandAccent
   }()
 
   func body(content: Content) -> some View {
@@ -195,12 +195,14 @@ extension View {
 // MARK: - iOS 16+ visible toolbar helper
 
 struct VisibleToolbarBackground: ViewModifier {
+  var navBarColor: Color = .brandNavBar
+
   func body(content: Content) -> some View {
     if #available(iOS 16.0, *) {
       return AnyView(
         content
           .toolbarBackground(.visible, for: .navigationBar)
-          .toolbarBackground(Color.brandNavBar, for: .navigationBar)
+          .toolbarBackground(navBarColor, for: .navigationBar)
           .toolbarColorScheme(.dark, for: .navigationBar)
       )
     } else {
@@ -378,23 +380,29 @@ struct BottomToolbar<Content: View>: View {
 struct DarkPageTemplate<Content: View, Toolbar: View>: View {
   let content: Content
   let toolbar: Toolbar?
+  var backgroundColor: Color
+  var navBarColor: Color
 
   /// Creates a template with content and an optional bottom toolbar.
   init(
+    backgroundColor: Color = .brandBackground,
+    navBarColor: Color = .brandNavBar,
     @ViewBuilder bottomToolbar: () -> Toolbar,
     @ViewBuilder content: () -> Content
   ) {
+    self.backgroundColor = backgroundColor
+    self.navBarColor = navBarColor
     self.toolbar = bottomToolbar()
     self.content = content()
   }
 
   var body: some View {
     ZStack {
-      Color.brandBackground.ignoresSafeArea()
+      backgroundColor.ignoresSafeArea()
       content
     }
     .navigationBarTitleDisplayMode(.inline)
-    .modifier(VisibleToolbarBackground())
+    .modifier(VisibleToolbarBackground(navBarColor: navBarColor))
     .applyLegacyNavBarStyle()
     .foregroundColor(.brandTextPrimary)
     .preferredColorScheme(.dark)
@@ -411,7 +419,13 @@ struct DarkPageTemplate<Content: View, Toolbar: View>: View {
 // No-toolbar convenience initializer
 extension DarkPageTemplate where Toolbar == EmptyView {
   /// Creates a template without a bottom toolbar (for pushed views).
-  init(@ViewBuilder content: () -> Content) {
+  init(
+    backgroundColor: Color = .brandBackground,
+    navBarColor: Color = .brandNavBar,
+    @ViewBuilder content: () -> Content
+  ) {
+    self.backgroundColor = backgroundColor
+    self.navBarColor = navBarColor
     self.toolbar = nil
     self.content = content()
   }

@@ -329,7 +329,7 @@ struct CatchChatView: View {
     Button(action: action) {
       Image(systemName: icon)
         .font(.brandTitle3)
-        .foregroundColor(disabled ? .gray : .white)
+        .foregroundColor(disabled ? .brandTextSecondary : .brandTextPrimary)
         .frame(minWidth: 40)
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
@@ -393,7 +393,7 @@ struct CatchChatView: View {
       } label: {
         Image(systemName: useConfirmStyle ? "checkmark.circle.fill" : "arrow.right.circle.fill")
           .font(.title2)
-          .foregroundColor(.white)
+          .foregroundColor(.brandTextPrimary)
       }
       .accessibilityIdentifier("researcherStepConfirmButton")
     }
@@ -707,7 +707,7 @@ struct CatchChatView: View {
   private func capsuleFill(_ color: ChatCapsuleColor) -> Color {
     switch color {
     case .green:  return Color.brandSuccess.opacity(0.25)
-    case .yellow: return Color.yellow.opacity(0.25)
+    case .yellow: return Color.brandSecondaryAccent.opacity(0.25)
     case .red:    return Color.brandError.opacity(0.25)
     case .grey:   return Color.brandTextSecondary.opacity(0.25)
     }
@@ -716,7 +716,7 @@ struct CatchChatView: View {
   private func capsuleBorder(_ color: ChatCapsuleColor) -> Color {
     switch color {
     case .green:  return Color.brandSuccess.opacity(0.9)
-    case .yellow: return Color.yellow.opacity(0.9)
+    case .yellow: return Color.brandSecondaryAccent.opacity(0.9)
     case .red:    return Color.brandError.opacity(0.9)
     case .grey:   return Color.brandTextSecondary.opacity(0.9)
     }
@@ -833,7 +833,7 @@ struct CatchChatView: View {
       if let closeRange = afterOpen.range(of: "**") {
         let inner = String(afterOpen[..<closeRange.lowerBound])
         var styled = AttributedString(inner)
-        styled.foregroundColor = .brandSuccess
+        styled.foregroundColor = Color.brandSuccess
         result += styled
         remaining = afterOpen[closeRange.upperBound...]
       } else {

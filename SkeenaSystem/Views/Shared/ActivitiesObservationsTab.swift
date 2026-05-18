@@ -121,7 +121,7 @@ private struct MarkRow: View {
           .padding(.horizontal, 8)
           .padding(.vertical, 3)
           .background(report.status == .uploaded ? Color.brandSuccess.opacity(0.12) : Color.brandAccent.opacity(0.12))
-          .foregroundColor(report.status == .uploaded ? .green : .blue)
+          .foregroundColor(report.status == .uploaded ? .brandSuccess : .brandAccent)
           .clipShape(Capsule())
       }
       Text(Self.timestampFormatter.string(from: report.createdAt))
@@ -171,7 +171,7 @@ private struct NoteRow: View {
           .padding(.horizontal, 8)
           .padding(.vertical, 3)
           .background(observation.status == .uploaded ? Color.brandSuccess.opacity(0.12) : Color.brandAccent.opacity(0.12))
-          .foregroundColor(observation.status == .uploaded ? .green : .blue)
+          .foregroundColor(observation.status == .uploaded ? .brandSuccess : .brandAccent)
           .clipShape(Capsule())
       }
     }

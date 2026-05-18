@@ -28,7 +28,7 @@ struct SocialPost: Identifiable {
 private let mockPosts: [SocialPost] = [
   // Mad Thinker feed (5 posts)
   SocialPost(id: 1, username: "river_runner", avatarSystemName: "person.circle.fill",
-             assetImage: "social_feed_1", placeholderIcon: "photo", placeholderColor: .blue,
+             assetImage: "social_feed_1", placeholderIcon: "photo", placeholderColor: .brandAccent,
              caption: "Beautiful morning on the water. Can't beat this view!",
              likesCount: 42, commentsCount: 7, timeAgo: "2h", feed: .madThinker),
   SocialPost(id: 2, username: "tightlines_tom", avatarSystemName: "person.circle.fill",

@@ -639,12 +639,12 @@ private struct StatusPill: View {
     guard let raw = status, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
     let s = raw.replacingOccurrences(of: " ", with: "").lowercased()
     // Exact mappings as specified
-    if s == "scheduled" { return (raw, .green) }
-    if s == "departed" { return (raw, .green) }
-    if s == "enroute" { return (raw, .green) }
-    if s == "arrived" { return (raw, .green) }
-    if s == "expected" { return (raw, .green) }
-    if s == "delayed" { return (raw, .yellow) }
+    if s == "scheduled" { return (raw, .brandSuccess) }
+    if s == "departed" { return (raw, .brandSuccess) }
+    if s == "enroute" { return (raw, .brandSuccess) }
+    if s == "arrived" { return (raw, .brandSuccess) }
+    if s == "expected" { return (raw, .brandSuccess) }
+    if s == "delayed" { return (raw, .brandWarning) }
     if s == "cancelled" { return (raw, .red) }
     if s == "diverted" { return (raw, .red) }
     // Any other status — do not show a pill

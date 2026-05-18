@@ -711,8 +711,8 @@ private struct CatchReportStatusChip: View {
   private var foreground: Color {
     if isArchived { return .gray }
     switch status {
-    case .savedLocally: return .blue
-    case .uploaded: return .green
+    case .savedLocally: return .brandAccent
+    case .uploaded: return .brandSuccess
     }
   }
 }

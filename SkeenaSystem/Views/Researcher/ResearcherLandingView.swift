@@ -38,7 +38,7 @@ struct ResearcherLandingView: View {
 
   var body: some View {
     NavigationStack(path: $navPath) {
-      DarkPageTemplate(bottomToolbar: {
+      DarkPageTemplate(backgroundColor: .researcherBackground, navBarColor: .researcherBackground, bottomToolbar: {
         RoleAwareToolbar(activeTab: "home")
       }) {
         VStack(spacing: 0) {
@@ -49,13 +49,13 @@ struct ResearcherLandingView: View {
             HStack(spacing: 12) {
               Text("\(auth.currentFirstName ?? "") \(auth.currentLastName ?? "")")
                 .font(.brandCaption.weight(.semibold))
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
 
               Spacer()
 
               Text(Self.conservationModeLabel)
                 .font(.brandCaption.weight(.semibold))
-                .foregroundColor(.brandSuccess)
+                .foregroundColor(.researcherPrediction)
                 .accessibilityIdentifier("conservationModeLabel")
             }
             .padding(.horizontal, 20)
@@ -91,10 +91,10 @@ struct ResearcherLandingView: View {
             HStack(spacing: 8) {
               Image(systemName: "water.waves")
                 .font(.brandCaption)
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
               Text("Fisheries Conditions")
                 .font(.brandCaption.weight(.semibold))
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
               Spacer()
               Image(systemName: "chevron.right")
                 .font(.brandCaption.weight(.semibold))
@@ -155,7 +155,7 @@ struct ResearcherLandingView: View {
             Button(action: { goToManageAccount = true }) {
               Image(systemName: "person.circle")
                 .font(.brandTitle3.weight(.semibold))
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
             }
             .accessibilityIdentifier("manageProfileButton")
             CommunityToolbarButton()
@@ -167,10 +167,10 @@ struct ResearcherLandingView: View {
               HStack(spacing: 6) {
                 Image(systemName: "leaf.fill")
                   .font(.brandSubheadline)
-                  .foregroundColor(.brandTextPrimary)
+                  .foregroundColor(.researcherTextPrimary)
                 Text("Donate")
                   .font(.brandCaption)
-                  .foregroundColor(.brandTextPrimary)
+                  .foregroundColor(.researcherTextPrimary)
               }
             }
             .accessibilityIdentifier("communityDonationLink")
@@ -181,10 +181,10 @@ struct ResearcherLandingView: View {
             HStack(spacing: 6) {
               Image(systemName: "person.crop.circle.badge.xmark")
                 .font(.brandSubheadline)
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
               Text("Log out")
                 .font(.brandCaption)
-                .foregroundColor(.brandTextPrimary)
+                .foregroundColor(.researcherTextPrimary)
             }
           }
           .accessibilityIdentifier("logoutCapsule")
@@ -222,7 +222,7 @@ struct ResearcherLandingView: View {
           }
         )
       }
-      .tint(.brandAccent)
+      .tint(.researcherAccent)
       .fullScreenCover(isPresented: $chatVM.showRecordObservation, onDismiss: {
         // The sheet can be dismissed via Cancel (no observation saved) or
         // via Save (onSaved fires first). In both cases reset the chat so

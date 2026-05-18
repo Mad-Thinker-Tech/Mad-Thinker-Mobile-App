@@ -206,7 +206,7 @@ struct GuideLandingView: View {
                 .font(.brandCaption.weight(.semibold))
                 .foregroundColor(.brandSuccess)
             }
-            .toggleStyle(SwitchToggleStyle(tint: .green))
+            .toggleStyle(SwitchToggleStyle(tint: .brandSuccess))
             .fixedSize()
             .accessibilityIdentifier("conservationToggle")
           }
@@ -560,9 +560,9 @@ struct GuideLandingView: View {
 
   private func pressureTrendColor(_ trend: WeatherPressureTrend?) -> Color {
     switch trend {
-    case .rising:  return .green
+    case .rising:  return .brandSuccess
     case .falling: return .red
-    default:       return .gray
+    default:       return .brandTextSecondary
     }
   }
 
