@@ -79,7 +79,7 @@ struct ResearcherLandingView: View {
             // surrounding layout.
             CommunityLogoView(config: communityService.activeCommunityConfig, size: 96)
               .frame(maxWidth: .infinity)
-              .padding(.vertical, 8)
+              .padding(.vertical, 16)
           }
           .padding(.top, 12)
 
