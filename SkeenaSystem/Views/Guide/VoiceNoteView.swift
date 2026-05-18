@@ -240,6 +240,12 @@ nonisolated final class VoiceNoteStore: ObservableObject, @unchecked Sendable {
     (boundDirectoryURL ?? rootDirectoryURL).appendingPathComponent(note.jsonFilename)
   }
 
+  /// Resolve audio URL by note ID alone — works even if the note's JSON is missing from the store.
+  func audioURL(forNoteId id: UUID) -> URL? {
+    guard let dir = boundDirectoryURL else { return nil }
+    return dir.appendingPathComponent("note_\(id.uuidString).m4a")
+  }
+
   @discardableResult
   func addNew(
     audioTempURL: URL,
