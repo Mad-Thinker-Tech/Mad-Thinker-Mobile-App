@@ -245,7 +245,7 @@ private struct StatusPill: View {
   private var foreground: Color {
     switch status {
     case .notStarted: .orange
-    case .inProgress: .green
+    case .inProgress: .brandSuccess
     case .completed: .gray
     }
   }

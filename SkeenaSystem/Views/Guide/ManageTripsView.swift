@@ -206,7 +206,7 @@ private struct TripStatusPill: View {
   private var foregroundColor: Color {
     switch status {
     case .notStarted: return .orange
-    case .inProgress: return .green
+    case .inProgress: return .brandSuccess
     case .completed: return .gray
     }
   }

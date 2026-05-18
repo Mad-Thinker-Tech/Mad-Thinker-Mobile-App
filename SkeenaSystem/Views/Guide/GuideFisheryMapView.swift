@@ -236,7 +236,7 @@ struct GuideFisheryMapView: View {
       HStack(spacing: 5) {
         Image(systemName: showAll ? "checkmark.square.fill" : "square")
           .font(.system(size: 14, weight: .semibold))
-          .foregroundColor(showAll ? .blue : .white.opacity(0.7))
+          .foregroundColor(showAll ? .brandAccent : .brandTextTertiary)
         Text("All")
           .font(.brandCaption.weight(.semibold))
           .foregroundColor(.brandTextPrimary)

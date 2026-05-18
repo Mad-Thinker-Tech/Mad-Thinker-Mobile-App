@@ -95,7 +95,7 @@ struct OpsTicketCreateView: View {
                             ProgressView().tint(.white)
                         } else {
                             Text("Save")
-                                .foregroundColor(taskName.isEmpty ? .gray : .blue)
+                                .foregroundColor(taskName.isEmpty ? .brandTextSecondary : .brandAccent)
                         }
                     }
                     .disabled(taskName.isEmpty || isSaving)

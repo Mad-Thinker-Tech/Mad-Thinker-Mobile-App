@@ -29,13 +29,13 @@ struct ResearcherCatchConfirmationView: View {
   var body: some View {
     NavigationView {
       ZStack {
-        Color.brandBackground.ignoresSafeArea()
+        Color.researcherBackground.ignoresSafeArea()
 
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             Text("Review Catch Report")
               .font(.brandTitle3.weight(.bold))
-              .foregroundColor(.brandTextPrimary)
+              .foregroundColor(.researcherTextPrimary)
               .padding(.bottom, 4)
 
             Group {
@@ -84,40 +84,40 @@ struct ResearcherCatchConfirmationView: View {
                 Button(action: cancelEdit) {
                   Text("Cancel")
                     .font(.brandHeadline.weight(.bold))
-                    .foregroundColor(.brandTextPrimary)
+                    .foregroundColor(.researcherTextPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.brandTextPrimary.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.researcherTextPrimary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
 
                 Button(action: saveEdits) {
                   Text("Save")
                     .font(.brandHeadline.weight(.bold))
-                    .foregroundColor(.brandTextPrimary)
+                    .foregroundColor(.researcherTextPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.brandAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.researcherAccent, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
               } else {
                 Button(action: startEditing) {
                   Text("Edit")
                     .font(.brandHeadline.weight(.bold))
-                    .foregroundColor(.brandTextPrimary)
+                    .foregroundColor(.researcherTextPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.brandTextPrimary.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.researcherTextPrimary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
 
                 Button { showSavedConfirmation = true } label: {
                   Text("Confirm")
                     .font(.brandHeadline.weight(.bold))
-                    .foregroundColor(.brandTextPrimary)
+                    .foregroundColor(.researcherTextPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.brandAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.researcherAccent, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("catchConfirmationConfirmButton")
@@ -132,7 +132,7 @@ struct ResearcherCatchConfirmationView: View {
         ToolbarItem(placement: .topBarTrailing) {
           if !isEditing {
             Button("Cancel") { showDeleteConfirmation = true }
-              .foregroundColor(.brandTextPrimary)
+              .foregroundColor(.researcherTextPrimary)
           }
         }
       }
@@ -283,11 +283,11 @@ struct ResearcherCatchConfirmationView: View {
     HStack(alignment: .top) {
       Text(label)
         .font(.brandSubheadline.weight(.semibold))
-        .foregroundColor(.brandTextSecondary)
+        .foregroundColor(.researcherTextPrimary.opacity(0.6))
         .frame(width: 120, alignment: .leading)
       Text(value)
         .font(.brandSubheadline)
-        .foregroundColor(.brandTextPrimary)
+        .foregroundColor(.researcherTextPrimary)
       Spacer()
     }
     .padding(.vertical, 4)
@@ -297,14 +297,14 @@ struct ResearcherCatchConfirmationView: View {
     HStack(alignment: .center) {
       Text(label)
         .font(.brandSubheadline.weight(.semibold))
-        .foregroundColor(.brandTextSecondary)
+        .foregroundColor(.researcherTextPrimary.opacity(0.6))
         .frame(width: 120, alignment: .leading)
       TextField(placeholder, text: text)
         .font(.brandSubheadline)
-        .foregroundColor(.brandTextPrimary)
+        .foregroundColor(.researcherTextPrimary)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.brandTextPrimary.opacity(0.1))
+        .background(Color.researcherTextPrimary.opacity(0.1))
         .cornerRadius(8)
     }
     .padding(.vertical, 2)

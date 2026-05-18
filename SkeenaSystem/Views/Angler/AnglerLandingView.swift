@@ -728,9 +728,9 @@ struct AnglerLandingView: View {
 
   private func pressureTrendColor(_ trend: WeatherPressureTrend?) -> Color {
     switch trend {
-    case .rising:  return .green
+    case .rising:  return .brandSuccess
     case .falling: return .red
-    default:       return .gray
+    default:       return .brandTextSecondary
     }
   }
 

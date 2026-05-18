@@ -138,7 +138,7 @@ struct OpsTicketsListView: View {
         switch stage {
         case "todo": return .gray
         case "doing": return .orange
-        case "done": return .green
+        case "done": return .brandSuccess
         default: return .gray
         }
     }

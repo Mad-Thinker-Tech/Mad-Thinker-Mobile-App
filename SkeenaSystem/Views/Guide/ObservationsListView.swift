@@ -155,7 +155,7 @@ struct ObservationsListView: View {
                 HStack {
                   Text("Pending Upload")
                   Spacer()
-                  statusPill("Saved locally", color: .blue)
+                  statusPill("Saved locally", color: .brandAccent)
                 }
               }
             }
@@ -180,7 +180,7 @@ struct ObservationsListView: View {
                 HStack {
                   Text("Uploaded")
                   Spacer()
-                  statusPill("Uploaded", color: .green)
+                  statusPill("Uploaded", color: .brandSuccess)
                 }
               }
             }
@@ -362,7 +362,7 @@ struct ObservationDetailView: View {
         HStack {
           statusPill(
             observation.isUploaded ? "Uploaded" : "Saved locally",
-            color: observation.isUploaded ? .green : .blue
+            color: observation.isUploaded ? .brandSuccess : .brandAccent
           )
           Spacer()
           Text(Self.dateFormatter.string(from: observation.createdAt))

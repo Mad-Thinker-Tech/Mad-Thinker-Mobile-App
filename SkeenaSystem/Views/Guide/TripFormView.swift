@@ -366,7 +366,7 @@ struct TripFormView: View {
           if vm.isSaving { ProgressView() } else { Text("Save") }
         }
         .buttonStyle(.borderedProminent)
-        .tint(vm.isValid && !vm.isSaving ? .blue : Color.brandTextSecondary.opacity(0.5))
+        .tint(vm.isValid && !vm.isSaving ? .brandAccent : Color.brandTextSecondary.opacity(0.5))
         .disabled(!vm.isValid || vm.isSaving)
         .accessibilityIdentifier("createTripToolbarButton")
       }

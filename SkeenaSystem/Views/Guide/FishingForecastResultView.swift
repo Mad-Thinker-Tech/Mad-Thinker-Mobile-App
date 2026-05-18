@@ -255,11 +255,11 @@ private struct LoadedForecastResultView: View {
     VStack(spacing: 6) {
       Text(label)
         .font(.brandCaption).bold()
-        .foregroundColor(isToday ? .blue : .white)
+        .foregroundColor(isToday ? .brandAccent : .brandTextPrimary)
 
       Text(formattedDate(day.date))
         .font(.brandCaption2)
-        .foregroundColor(isToday ? .blue.opacity(0.9) : .gray)
+        .foregroundColor(isToday ? .brandAccent.opacity(0.9) : .brandTextSecondary)
 
       VStack(spacing: 3) {
         rowMetric("High", "\(number(displayTempC(day.highTempC)))\(community.tempUnit)", highlight: isToday)
@@ -277,7 +277,7 @@ private struct LoadedForecastResultView: View {
     HStack {
       Text(label).font(.brandCaption2).foregroundColor(.brandTextSecondary)
       Spacer()
-      Text(value).font(.brandFootnote).foregroundColor(highlight ? .blue : .white)
+      Text(value).font(.brandFootnote).foregroundColor(highlight ? .brandAccent : .brandTextPrimary)
     }
   }
 
@@ -351,14 +351,14 @@ private struct LoadedForecastResultView: View {
         Text(timeText).monospacedDigit()
       }
       .font(.brandFootnote)
-      .foregroundColor(highlight ? .blue : .white)
+      .foregroundColor(highlight ? .brandAccent : .brandTextPrimary)
       .frame(width: tideDateColWidth, alignment: .leading)
 
       Spacer(minLength: 0)
 
       Text("\(number(displayTideM(point.heightM))) \(tideHeightUnit)")
         .font(.brandFootnote).bold()
-        .foregroundColor(highlight ? .blue : .white)
+        .foregroundColor(highlight ? .brandAccent : .brandTextPrimary)
         .frame(alignment: .trailing)
     }
   }

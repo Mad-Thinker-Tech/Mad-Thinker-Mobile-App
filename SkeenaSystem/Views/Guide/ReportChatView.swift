@@ -61,7 +61,7 @@ struct ReportChatView: View {
   @State private var showChatFullScreen = false
 
   private let labelFont: Font = .subheadline
-  private let labelColor: Color = .blue
+  private let labelColor: Color = .brandAccent
   private let valueFontSelected: Font = .subheadline
   private let valueFontPlaceholder: Font = .footnote
   private let valueColor: Color = .white
@@ -225,10 +225,10 @@ struct ReportChatView: View {
       HStack {
         Image(systemName: isSoloMode ? "person.fill.checkmark" : "person.fill")
           .font(.brandSubheadline)
-          .foregroundColor(isSoloMode ? .green : .white.opacity(0.7))
+          .foregroundColor(isSoloMode ? .brandSuccess : .brandTextTertiary)
         Text(isSoloMode ? "Fishing Solo" : "Fishing Solo?")
           .font(.brandSubheadline)
-          .foregroundColor(isSoloMode ? .green : .white)
+          .foregroundColor(isSoloMode ? .brandSuccess : .brandTextPrimary)
         Spacer()
         if isSoloMode {
           Image(systemName: "checkmark.circle.fill")

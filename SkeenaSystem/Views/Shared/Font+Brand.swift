@@ -8,14 +8,14 @@ import SwiftUI
 // Weight overrides remain at call sites (e.g. `.brandSubheadline.weight(.semibold)`)
 // because weight usage is too varied to enumerate.
 extension Font {
-    static let brandLargeTitle = Font.largeTitle
-    static let brandTitle = Font.title
-    static let brandTitle2 = Font.title2
-    static let brandTitle3 = Font.title3
-    static let brandHeadline = Font.headline
-    static let brandBody = Font.body
-    static let brandSubheadline = Font.subheadline
-    static let brandFootnote = Font.footnote
-    static let brandCaption = Font.caption
-    static let brandCaption2 = Font.caption2
+    static let brandLargeTitle  = Font.custom("NewYork", size: 34, relativeTo: .largeTitle)
+    static let brandTitle       = Font.custom("NewYork", size: 28, relativeTo: .title)
+    static let brandTitle2      = Font.custom("NewYork", size: 22, relativeTo: .title2)
+    static let brandTitle3      = Font.custom("NewYork", size: 20, relativeTo: .title3)
+    static let brandHeadline    = Font.custom("NewYork", size: 17, relativeTo: .headline)
+    static let brandBody        = Font.custom("NewYork", size: 17, relativeTo: .body)
+    static let brandSubheadline = Font.custom("NewYork", size: 15, relativeTo: .subheadline)
+    static let brandFootnote    = Font.custom("NewYork", size: 13, relativeTo: .footnote)
+    static let brandCaption     = Font.custom("NewYork", size: 12, relativeTo: .caption)
+    static let brandCaption2    = Font.custom("NewYork", size: 11, relativeTo: .caption2)
 }
