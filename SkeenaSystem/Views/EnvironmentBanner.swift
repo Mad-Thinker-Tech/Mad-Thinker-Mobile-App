@@ -7,7 +7,7 @@
 //  immediately know whether they're on synthetic or production data.
 //
 //  Color scheme:
-//  - DEV   : yellow banner
+//  - DEV   : teal banner (#609BAB)
 //  - STAGE : orange banner
 //  - PROD or empty : no banner
 //  - anything else : gray banner with raw label text
@@ -24,7 +24,7 @@ struct EnvironmentBanner: ViewModifier {
 
     private var bannerColor: Color {
         switch label {
-        case "DEV": return .yellow
+        case "DEV": return Color(hex: "#609BAB")
         case "STAGE": return .orange
         default: return .gray
         }
@@ -35,7 +35,7 @@ struct EnvironmentBanner: ViewModifier {
             if let label {
                 Text(label)
                     .font(.caption.bold())
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity, minHeight: 24)
                     .background(bannerColor)
             }

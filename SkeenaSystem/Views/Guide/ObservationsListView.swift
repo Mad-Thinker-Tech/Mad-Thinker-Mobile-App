@@ -475,11 +475,9 @@ struct ObservationDetailView: View {
   @StateObject private var player = NoteAudioPlayer()
 
   private func playAudio(noteId: UUID) {
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let audioURL = docs
-      .appendingPathComponent("VoiceNotes", isDirectory: true)
-      .appendingPathComponent("note_\(noteId.uuidString).m4a")
-    player.play(url: audioURL)
+    let voiceStore = VoiceNoteStore.shared
+    guard let note = voiceStore.notes.first(where: { $0.id == noteId }) else { return }
+    player.play(url: voiceStore.audioURL(for: note))
   }
 
   // MARK: - Helpers
