@@ -347,6 +347,7 @@ struct ObservationDetailView: View {
   @State private var observation: Observation
   @State private var editedTranscript: String
   @State private var showSavedAlert = false
+  @State private var audioUnavailable = false
 
   private var canEdit: Bool { observation.status == .savedLocally }
 
@@ -398,15 +399,16 @@ struct ObservationDetailView: View {
               .foregroundColor(.brandTextSecondary)
 
             Button {
+              audioUnavailable = false
               playAudio(noteId: noteId)
             } label: {
               HStack {
-                Image(systemName: "play.circle.fill")
+                Image(systemName: audioUnavailable ? "exclamationmark.circle.fill" : "play.circle.fill")
                   .font(.brandTitle2)
-                Text("Play recording")
+                Text(audioUnavailable ? "Recording unavailable" : "Play recording")
                   .font(.brandSubheadline)
               }
-              .foregroundColor(.brandAccent)
+              .foregroundColor(audioUnavailable ? .brandTextSecondary : .brandAccent)
               .padding()
               .frame(maxWidth: .infinity, alignment: .leading)
               .background(Color.brandSurface)
@@ -475,9 +477,12 @@ struct ObservationDetailView: View {
   @StateObject private var player = NoteAudioPlayer()
 
   private func playAudio(noteId: UUID) {
-    let voiceStore = VoiceNoteStore.shared
-    guard let note = voiceStore.notes.first(where: { $0.id == noteId }) else { return }
-    player.play(url: voiceStore.audioURL(for: note))
+    guard let url = VoiceNoteStore.shared.audioURL(forNoteId: noteId),
+          FileManager.default.fileExists(atPath: url.path) else {
+      audioUnavailable = true
+      return
+    }
+    player.play(url: url)
   }
 
   // MARK: - Helpers
