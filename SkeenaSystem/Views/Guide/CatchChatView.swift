@@ -60,7 +60,7 @@ struct CatchChatView: View {
             Text("Reset")
           }
           .font(.brandCaption2)
-          .foregroundColor(hasInteracted ? .brandTextSecondary : .brandTextSecondary.opacity(0.3))
+          .foregroundColor(hasInteracted ? .brandTextPrimary.opacity(0.5) : .brandTextPrimary.opacity(0.15))
         }
         .disabled(!hasInteracted)
         .padding(.trailing, 8)

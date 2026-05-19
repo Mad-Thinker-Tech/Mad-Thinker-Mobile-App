@@ -73,7 +73,7 @@ struct ResearcherLandingView: View {
 
             CommunityLogoView(config: communityService.activeCommunityConfig, size: 160)
               .frame(maxWidth: .infinity)
-              .padding(.vertical, 16)
+              .padding(.vertical, 8)
           }
           .padding(.top, 12)
 
@@ -100,8 +100,8 @@ struct ResearcherLandingView: View {
           }
           .buttonStyle(.plain)
           .padding(.horizontal, 16)
-          .padding(.top, 12)
-          .padding(.bottom, 8)
+          .padding(.top, 4)
+          .padding(.bottom, 4)
           .accessibilityIdentifier("fishingForecastTile")
 
           // ── Catch chat ───────────────────────────────────────────
