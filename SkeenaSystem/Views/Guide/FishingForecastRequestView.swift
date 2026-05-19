@@ -189,6 +189,7 @@ struct FishingForecastRequestView: View {
                   .disabled(batchLoading)
                 }
                 .padding(.horizontal, 16)
+                .padding(.bottom, 10)
               }
               // Column headers aligned above metrics
               HStack(spacing: 0) {
