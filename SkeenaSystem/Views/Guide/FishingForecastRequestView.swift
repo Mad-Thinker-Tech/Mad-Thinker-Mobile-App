@@ -176,6 +176,17 @@ struct FishingForecastRequestView: View {
                     .font(.brandCaption2)
                     .foregroundColor(.brandTextSecondary)
                   Spacer()
+                  Button {
+                    fetchBatchConditions()
+                  } label: {
+                    HStack(spacing: 4) {
+                      Image(systemName: "arrow.counterclockwise")
+                      Text("Refresh")
+                    }
+                    .font(.brandCaption2)
+                    .foregroundColor(batchLoading ? .brandTextSecondary.opacity(0.4) : .brandTextSecondary)
+                  }
+                  .disabled(batchLoading)
                 }
                 .padding(.horizontal, 16)
               }
@@ -283,11 +294,12 @@ struct FishingForecastRequestView: View {
   @ViewBuilder
   private func riverRow(name: String, isLoading: Bool) -> some View {
     HStack(spacing: 0) {
-      // River name — left-justified
+      // River name — left-justified; shrinks down to caption size for long names
       Text(name)
         .font(.brandSubheadline.weight(.semibold))
         .foregroundColor(.brandTextPrimary)
         .lineLimit(1)
+        .minimumScaleFactor(0.75)
 
       Spacer(minLength: 12)
 
