@@ -165,7 +165,7 @@ struct FishingForecastRequestView: View {
             .padding(.vertical, 40)
             .padding(.horizontal, 20)
           } else {
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
               // Last-updated stamp — shown whenever we have data (from
               // cache on first paint, or from a fresh fetch). Same font /
               // color as the Level/Temp column headers below so the row
@@ -196,11 +196,11 @@ struct FishingForecastRequestView: View {
                 HStack(spacing: 12) {
                   Text("Level")
                     .font(.brandCaption2)
-                    .foregroundColor(.brandTextSecondary)
+                    .foregroundColor(.brandTextPrimary)
                     .frame(width: 70, alignment: .center)
                   Text("Temp")
                     .font(.brandCaption2)
-                    .foregroundColor(.brandTextSecondary)
+                    .foregroundColor(.brandTextPrimary)
                     .frame(width: 70, alignment: .center)
                 }
                 // Match chevron + padding space
