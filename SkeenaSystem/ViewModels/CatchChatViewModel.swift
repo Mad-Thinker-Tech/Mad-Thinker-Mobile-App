@@ -348,7 +348,7 @@ final class CatchChatViewModel: ObservableObject {
       return
     } else if conservationMode {
       awaitingHeadPhoto = true
-      firstPrompt = appendAssistant("Hi \(namePart)let's start with a close-up photo of the fish's head.\n§\nThis photo will be used to uniquely identify the fish.")
+      firstPrompt = appendAssistant("Hi \(namePart)let's get started with a photo of the side of the fish's head.\n§\nEnsure that you capture the eye of the fish, nose, and at least 1 inch past the gill plate.")
     } else {
       firstPrompt = appendAssistant("Hi \(namePart)upload a photo of the fish")
     }
@@ -373,7 +373,7 @@ final class CatchChatViewModel: ObservableObject {
     activityChoiceAnchorMessageID = nil
 
     awaitingHeadPhoto = true
-    let prompt = appendAssistant("Let's get started with a photo of the fish's head.\n§\nThis photo will be used to uniquely identify the fish.")
+    let prompt = appendAssistant("Let's get started with a photo of the side of the fish's head.\n§\nEnsure that you capture the eye of the fish, nose, and at least 1 inch past the gill plate.")
     uploadAnchorMessageID = prompt.id
     showCaptureOptions = true
   }
