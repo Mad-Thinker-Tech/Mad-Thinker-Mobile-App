@@ -31,6 +31,7 @@ struct ResearcherLandingView: View {
 
   @State private var showConfirmation = false
   @State private var goToManageAccount = false
+  @State private var showLogoutConfirmation = false
 
   // Path-based nav so the bottom toolbar's "Catches" button can push the
   // reports list the same way guide/public landing views do.
@@ -216,6 +217,12 @@ struct ResearcherLandingView: View {
           }
         )
       }
+      .alert("Unsaved Catch", isPresented: $showLogoutConfirmation) {
+        Button("Log Out", role: .destructive) { performLogout() }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("You have a catch report in progress. Logging out will discard it.")
+      }
       .tint(.researcherAccent)
       .fullScreenCover(isPresented: $chatVM.showRecordObservation, onDismiss: {
         // The sheet can be dismissed via Cancel (no observation saved) or
@@ -235,7 +242,19 @@ struct ResearcherLandingView: View {
 
   // MARK: - Actions
 
+  private var hasUnsavedCatch: Bool {
+    chatVM.messages.count > 1 || chatVM.photoFilename != nil
+  }
+
   private func logoutTapped() {
+    if hasUnsavedCatch {
+      showLogoutConfirmation = true
+    } else {
+      performLogout()
+    }
+  }
+
+  private func performLogout() {
     Task {
       await auth.signOutRemote()
       await MainActor.run {
