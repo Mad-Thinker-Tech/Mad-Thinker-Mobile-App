@@ -131,6 +131,13 @@ final class CommunityService: ObservableObject {
     /// Fetches user_communities with joined community info from the REST API.
     /// Call after successful login/token refresh.
     func fetchMemberships() async {
+        // Reset so AppRootView shows the loading spinner for the duration of this
+        // fetch. Without this, a prior no-token/offline call can set
+        // hasFetchedMemberships=true while activeCommunityId is still nil, causing
+        // CommunityPickerView to flash briefly on the next online login before the
+        // real fetch completes and auto-selects the community.
+        await MainActor.run { self.hasFetchedMemberships = false }
+
         // --- DIAGNOSTIC: Log pre-fetch state ---
         AppLogging.log("[CommunityService][DIAG] Pre-fetch state: memberships.count=\(memberships.count) activeCommunityId=\(activeCommunityId ?? "nil") hasFetched=\(hasFetchedMemberships)", level: .info, category: .community)
         if let cachedConfigData = UserDefaults.standard.data(forKey: kActiveCommunityConfig) {

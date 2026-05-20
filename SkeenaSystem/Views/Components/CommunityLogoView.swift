@@ -2,14 +2,15 @@
 //  CommunityLogoView.swift
 //  SkeenaSystem
 //
-//  Displays the community logo with a four-tier fallback:
+//  Displays the community logo with a three-tier fallback:
 //  1. Persistent on-device cache (CommunityLogoCache) — survives launches,
 //     works offline once a community's logo has been seen online at least
 //     once. URL-keyed so two communities sharing a logo dedupe automatically.
-//  2. Remote URL (AsyncImage) — if config.logoUrl is set and cache misses.
+//  2. Remote download — on cache miss the view fetches and caches the logo
+//     itself via .task(id: logoUrl), then re-renders. No dependency on
+//     CommunityService.fetchMemberships() pre-filling the cache.
 //  3. Bundled asset — Image(config.resolvedLogoAssetName) during load/failure.
-//  4. Default "AppLogo" — community-neutral fallback. The asset's underlying
-//     image is the Mad Thinker mark, not any specific community's branding.
+//     Falls back to "AppLogo" (Mad Thinker mark) when no asset name is set.
 //
 //  No spinner is shown — the bundled asset renders immediately while the
 //  remote image loads, so there is no visual flicker.
@@ -21,42 +22,22 @@ struct CommunityLogoView: View {
     let config: CommunityConfig
     var size: CGFloat = 160
 
+    @State private var resolvedImage: UIImage?
+
     var body: some View {
         Group {
-            if let urlString = config.logoUrl, let url = URL(string: urlString) {
-                // Tier 1: persistent disk cache. Synchronous read; NSCache
-                // memoization in CommunityLogoCache means repeat renders
-                // during a session don't re-hit disk.
-                if let data = CommunityLogoCache.shared.loadData(for: url),
-                   let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    // Tier 2: remote fetch. Falls back to bundled on
-                    // network failure (which is what an offline launch
-                    // before-first-online-sync hits).
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFit()
-                        case .failure:
-                            bundledLogo
-                        case .empty:
-                            bundledLogo
-                        @unknown default:
-                            bundledLogo
-                        }
-                    }
-                }
+            if let uiImage = resolvedImage {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
             } else {
-                // No remote URL — Tier 3: Bundled asset
                 bundledLogo
             }
         }
         .frame(width: size, height: size)
+        .task(id: config.logoUrl) {
+            await loadLogo()
+        }
     }
 
     // Tier 3/4: Bundled asset (resolvedLogoAssetName falls back to "AppLogo",
@@ -65,5 +46,24 @@ struct CommunityLogoView: View {
         Image(config.resolvedLogoAssetName)
             .resizable()
             .scaledToFit()
+    }
+
+    private func loadLogo() async {
+        guard let urlString = config.logoUrl, let url = URL(string: urlString) else {
+            resolvedImage = nil
+            return
+        }
+        // Tier 1: synchronous cache hit (NSCache or disk)
+        if let data = CommunityLogoCache.shared.loadData(for: url),
+           let img = UIImage(data: data) {
+            resolvedImage = img
+            return
+        }
+        // Tier 2: download, cache, then display
+        await CommunityLogoCache.shared.cache(url)
+        if let data = CommunityLogoCache.shared.loadData(for: url),
+           let img = UIImage(data: data) {
+            resolvedImage = img
+        }
     }
 }
